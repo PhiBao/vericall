@@ -124,7 +124,8 @@ async function main() {
         );
 
       check(
-        onchain.provider.toLowerCase() === record.provider.toLowerCase() &&
+        onchain.endpointUri === record.endpointUri &&
+          onchain.provider.toLowerCase() === record.provider.toLowerCase() &&
           onchain.verifier.toLowerCase() === record.verifier.toLowerCase() &&
           onchain.graceLatencyMs === record.graceLatencyMs &&
           onchain.hardTimeoutMs === record.hardTimeoutMs &&
@@ -133,7 +134,10 @@ async function main() {
           priceMatches &&
           onchain.schemaHash.toLowerCase() === record.schemaHash.toLowerCase(),
         `covenant ${record.serviceId} (${record.slug}) matches its record term for term`,
-        `onchain: price=${onchain.callPriceUsdc} grace=${onchain.graceLatencyMs} hard=${onchain.hardTimeoutMs} rebate=${onchain.maxRebateBps} penalty=${onchain.slashPenaltyBps}`,
+        `onchain: endpoint=${onchain.endpointUri} price=${onchain.callPriceUsdc} grace=${onchain.graceLatencyMs} hard=${onchain.hardTimeoutMs} rebate=${onchain.maxRebateBps} penalty=${onchain.slashPenaltyBps}` +
+          (onchain.endpointUri === record.endpointUri
+            ? ""
+            : `\n        the record says ${record.endpointUri}`),
       );
       check(splitsMatch, `covenant ${record.serviceId} split table is ${record.providerBps}/${10_000 - record.providerBps}`);
 

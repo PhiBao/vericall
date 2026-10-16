@@ -310,6 +310,11 @@ pub mod hex_address {
     }
 }
 
+/// A 32-byte value as a `0x`-prefixed hex string, in both directions.
+///
+/// The whole API speaks hex, because every other tool the output touches —
+/// `cast`, an explorer, a wallet prompt — does, and a JSON array of 32 integers
+/// is not a hash to anyone reading it.
 pub mod hex_bytes32 {
     use serde::{Deserialize, Deserializer, Serializer};
 

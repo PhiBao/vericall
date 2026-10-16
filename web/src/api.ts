@@ -132,6 +132,13 @@ function postJson<T>(path: string, body: unknown, signal?: AbortSignal): Promise
  * Rust field is a `[u8; 32]`. Normalising once, here, is what keeps that churn
  * out of the interface: a hash is displayed as hex or not at all.
  */
+/**
+ * A 32-byte hash as `0x`-prefixed hex.
+ *
+ * The verifier sends hex. The array branch is kept because it costs one `if` and
+ * means a response from an older build of the verifier still renders as a hash
+ * instead of an em-dash — the failure mode it was written for.
+ */
 function normalizeHash(value: unknown): string {
   if (typeof value === "string" && value.startsWith("0x")) return value;
   if (Array.isArray(value)) {

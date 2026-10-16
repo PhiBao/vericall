@@ -80,11 +80,15 @@ pub struct CallOutcome {
     pub body_too_large: bool,
     /// Bytes actually received (before any UTF-8 interpretation).
     pub response_bytes: usize,
-    /// `keccak256(body)` — the commitment the contract stores.
+    /// `keccak256(body)` — the commitment the contract stores. Serialised as
+    /// hex, because every other consumer of this API speaks 0x-prefixed hashes
+    /// and a bare array of 32 integers is a wire format nobody wants to decode.
+    #[serde(with = "crate::covenants::hex_bytes32")]
     pub response_hash: [u8; 32],
     /// `sha256(body)`, hex — the commitment humans and HTTP tooling understand.
     pub response_sha256: String,
     /// `keccak256(request body || url)` — binds the attestation to what was asked.
+    #[serde(with = "crate::covenants::hex_bytes32")]
     pub request_hash: [u8; 32],
 }
 
