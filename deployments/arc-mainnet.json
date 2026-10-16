@@ -8,5 +8,6 @@
   "txHash": "0xe251f33dab9eb1b21e526d235233ecb7fa12a59f6453e587ab274609d04fa437",
   "blockNumber": 26265144,
   "gasUsed": "2927704",
-  "deployFeeUsdc": "0.058557"
+  "deployFeeUsdc": "0.058557",
+  "arcStudioApp": "https://studio.arc.io/app/b3658244-c47e-4bb9-b1c5-3b34acc595cc"
 }

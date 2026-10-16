@@ -279,6 +279,14 @@ Nothing in the product's claims depends on a simulated component behaving like a
 4. **Payable dependencies**: let a dependency register itself as an upstream of a service and receive splits without the provider listing it, which needs one signature rather than a policy.
 5. **Metered covenants**: batch an epoch of calls into one settlement, so a per-request price can be smaller than a transaction's worth of gas.
 
+## Documentation
+
+| Document | What it is for |
+| --- | --- |
+| [`docs/SUBMISSION.md`](docs/SUBMISSION.md) | The links, the transactions and the honest real-versus-simulated split, in submission order |
+| [`docs/DEMO-RUNBOOK.md`](docs/DEMO-RUNBOOK.md) | A shot list for the walkthrough video, timed, with the narration that matters |
+| `docs/assets/` | The two diagrams above, as SVG |
+
 ## Repository map
 
 ```
