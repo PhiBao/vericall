@@ -671,13 +671,20 @@ div.stack--tight {
 }
 
 .banner {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--gap-3);
+  display: block;
   padding: var(--gap-3) var(--gap-4);
   border-radius: var(--radius);
   border: 1px solid;
   font-size: var(--step--1);
+}
+
+/* A banner with a control in it lays out as a row instead. */
+.banner--action {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--gap-3);
+  flex-wrap: wrap;
 }
 
 .banner--info {
@@ -1120,12 +1127,16 @@ details[open] > summary {
 /* Ledger tables follow the width of the container they are in, not the width of
    the window: the same orders table is a ten-column statement in a full-width
    band and a labelled key/value record inside the narrower proof-ledger column.
-   A media query cannot express that, because the column is narrow at 1440px too. */
+   A media query cannot express that, because the column is narrow at 1440px too.
+
+   The threshold is set by the widest statement, which needs ~870px before its
+   ten columns fit side by side; below that the labelled record is the honest
+   presentation, because a horizontally scrolled table is not a comparison. */
 .table-wrap {
   container-type: inline-size;
 }
 
-@container (max-width: 680px) {
+@container (max-width: 880px) {
   .table--stack thead {
     display: none;
   }

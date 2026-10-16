@@ -39,6 +39,24 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
 
 /** One sentence a judge can act on, for any thrown value. */
+/**
+ * A short, readable description of a response body that is not the verifier's
+ * JSON. Error pages are HTML, and pasting one into a banner tells a reader
+ * nothing except that something went wrong — so the shape is named, not quoted.
+ */
+function summarise(body: string): string | null {
+  const text = body.trim();
+  if (text.length === 0) return null;
+  if (text.startsWith("<")) {
+    const title = /<title>([^<]{1,120})<\/title>/i.exec(text)?.[1]?.trim();
+    return title
+      ? `the response was an HTML page (“${title}”), not the verifier's API — is this the API host?`
+      : "the response was an HTML page, not the verifier's API — is this the API host?";
+  }
+  const single = text.replace(/\s+/g, " ");
+  return single.length > 200 ? `${single.slice(0, 200)}…` : single;
+}
+
 export function describeError(error: unknown): string {
   if (error instanceof ApiError) {
     return error.detail ? `${error.message} — ${error.detail}` : error.message;
@@ -74,11 +92,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!response.ok) {
     // The verifier reports problems as `{ error, ok: false }`. Surface that
-    // string verbatim: it is written for a human.
+    // string verbatim: it is written for a human. Anything else on the wire —
+    // a proxy's error page, a dev server's 404 — is summarised rather than
+    // dumped, because an HTML document is not an explanation.
     const detail =
-      isRecord(parsed) && typeof parsed.error === "string"
-        ? parsed.error
-        : text.slice(0, 400) || null;
+      isRecord(parsed) && typeof parsed.error === "string" ? parsed.error : summarise(text);
     throw new ApiError(`HTTP ${response.status} from ${path}`, {
       status: response.status,
       path,
@@ -90,7 +108,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new ApiError(`${path} answered ${response.status} with a body that is not JSON`, {
       status: response.status,
       path,
-      detail: text.slice(0, 400) || null,
+      detail: summarise(text),
     });
   }
 

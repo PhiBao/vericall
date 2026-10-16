@@ -37,8 +37,10 @@ export function Orientation({ contract, explorer }: OrientationProps) {
             </>
           ) : (
             <span className="small muted">
-              No clearinghouse address is configured on the verifier, so there is nothing to settle
-              against yet — the workbench still quotes and measures.
+              The clearinghouse address comes from the verifier&rsquo;s own configuration and it has
+              not been read yet — either the verifier is unreachable, or it was started without a
+              contract address. Nothing here is guessed: until a deployed contract is named, there
+              is nothing to settle against.
             </span>
           )}
         </div>

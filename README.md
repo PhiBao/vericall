@@ -260,7 +260,13 @@ Nothing in the product's claims depends on a simulated component behaving like a
 
 **Key handling.** Private keys are read from environment variables by name, never accepted as command-line arguments (which land in shell history and process listings) and never printed. The deployment record contains addresses and hashes only. The live deployment holds the verifier key as a platform secret; it is a demo key whose only power is to attest, and it is documented here because pretending otherwise would be worse.
 
-**Known risks.** The verifier is a single trusted measurement point: a caller who does not trust it should run its own, which the code is explicitly built to allow (the verifier is one binary with no privileged state). Latency measured at the caller's edge is evidence of the caller's experience, not of the provider's internal performance — which is what an SLA promises, and is worth stating plainly. Guards against these are in *Roadmap*.
+**Known risks.** Stated plainly, because a reviewer will find them anyway:
+
+1. **The verifier is a single measurement point.** A caller who does not trust it should run its own; the code is one binary with no privileged state, and the covenant's `verifier` address is the only thing to change. Latency measured at the caller's edge is evidence of the caller's experience, which is what an SLA promises — not of the provider's internal performance.
+2. **A caller chooses the request, so a caller can choose a bad one.** The contract pays a penalty for a breach, and a caller who deliberately sends a pathological request can provoke one. The request-binding check stops a caller from claiming a breach *it never asked for*, but it does not stop a caller from asking. This is the intended economics of an SLA credit — the provider's exposure per order is exactly the penalty rate it published, and it can price that in — but it is worth naming rather than implying that all breaches are the provider's fault. It matters less in practice for real services, which react to a bad request by rejecting it rather than breaching; it matters more for the built-in demo services below, because they take a `mode` parameter that can *request* a slow answer, and a covenant pointed at one of those has a genuinely extractable bond. The live deployment's three stakes total 0.18 USDC.
+3. **The live verifier holds a signing key.** Its authority is bounded to attesting for the covenants it has been told about, and it cannot move funds — the caller pays and the contract holds the money — but it can mis-attest within one order's rebate. That is why the key is a demo key and why the amount at risk is stated above.
+
+Guards against the first two are in *Roadmap*; the third is bounded by design and disclosed here.
 
 ## Limitations
 

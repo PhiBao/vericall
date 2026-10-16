@@ -144,7 +144,7 @@ export function Masthead({ chain, loading, wallet }: MastheadProps) {
         <WalletControl wallet={wallet} />
       </div>
       {wallet.error ? (
-        <div className="banner banner--warn" role="alert">
+        <div className="banner banner--warn banner--action" role="alert">
           <span>{wallet.error}</span>
           <button
             type="button"
