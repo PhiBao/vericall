@@ -52,7 +52,27 @@ On **vericall.fly.dev**, without connecting anything:
 - Scroll to **Published covenants** and point at the **bond** column: `needs 0.040000`.
   "A covenant cannot sell an order it cannot cover; the contract refuses at the point of sale."
 
-## 1:10–2:00 — run a real call
+## 1:10–1:50 — the model-backed covenant
+
+Switch the service picker to **Payment Intent Router** or **Payment Policy Guard**
+— the two labelled `model-backed`. Say why that label matters:
+
+> "These two are not fixed logic. Each call is one batched TypeSafe Jev request: a
+> choice over a closed set of intents, probability questions for the hazards, a
+> scored question for severity. Two things make that work under an SLA. The answer
+> is typed, so the schema can *require* a confidence and a probability per option —
+> a model returning prose could not satisfy it. And the policy is code: the model
+> supplies probabilities, the verdict comes from thresholds you can read and change
+> without another inference."
+
+Then press **Run call** on the guard and read the response: the five hazard
+probabilities, the severity, and the verdict with the thresholds it used.
+
+Mention the bounds, because a public endpoint spending real credits needs them:
+two concurrent calls, twelve a minute, three hundred a day, all reported by
+`/api/health`.
+
+## 1:50–2:20 — run a real call
 
 Scroll to **Live call**:
 
@@ -65,7 +85,23 @@ Scroll to **Live call**:
   refuses to sign unless the bytes it is about to send hash to what the caller wrote down onchain.
   Without that, you could point an order at a request you knew would fail and harvest the bond."
 
-## 2:00–3:00 — the build in Arc Studio
+## 2:20–2:50 — what a model outage costs
+
+```bash
+cd web
+node scripts/demo-outage.ts --network arc-mainnet --confirm-mainnet
+```
+
+> "This spends the service's own model budget until it refuses, then settles an
+> order while it is refusing. The 429 is the service's — nothing is injected. The
+> contract reads the refusal as a breach: the caller gets the escrow back plus a
+> penalty out of the provider's stake. A model outage is priced exactly the way a
+> slow endpoint is."
+
+If the script reports that the budget refilled, re-run it inside the same minute —
+that is the mechanism working, not the demo failing.
+
+## 2:50–3:20 — the build in Arc Studio
 
 Switch to the **Arc Studio** tab:
 
@@ -78,16 +114,24 @@ Switch to the **Arc Studio** tab:
   whose grace latency equals its hard timeout divided by zero and reverted. That is fixed, with a
   fuzz test over it."
 
-## 3:00–3:40 — the parts that make it more than a demo
+## 3:20–3:50 — the parts that make it more than a demo
 
-- Terminal: `node web/scripts/verify.ts --network arc-mainnet` → **23 checks, all passed**, no key.
+- Terminal: `node web/scripts/verify.ts --network arc-mainnet` → **31 checks, all passed**, no key.
   "That is a judge's check, not mine: bytecode, every covenant term against the chain, every settled
   order's payouts reproducible from the covenant's own rates, and the money whole."
 - Point at the **dependency wallet**: `0.004 → 0.195 USDC`. "It started with dust. That is 48×, earned
   entirely as per-call royalty splits on seven API calls — no invoice, no reconciliation, no
   custodian. Paying someone 3 cents out of a 15-cent call is impossible on card rails."
 
-## 3:40–4:00 — why this is worth continuing
+## 3:50–4:00 — connect and disconnect, in one breath
+
+If you have a wallet: press **Connect wallet** and point out that it lands on Arc in
+the same action — no "switch network" dialog to discover afterwards. Then press
+**Disconnect** and say the honest part: a page cannot revoke its own authorisation,
+so this clears the session here and asks the wallet to drop the permission where its
+API allows that.
+
+## 4:00–4:20 — why this is worth continuing
 
 > "The primitive is general: metered SaaS, agent-to-agent task settlement, dependency royalties are
 > the same instrument with different terms. What it needs next is not more code — it is one provider
