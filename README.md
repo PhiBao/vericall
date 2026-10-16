@@ -225,6 +225,31 @@ node scripts/verify.ts            --network arc-testnet
 
 Every script prints the explorer link, the gas used and the fee in USDC. `--dry-run` is supported where a step would spend.
 
+### The live deployment
+
+The app and the verifier are one process, so there is one origin, no CORS, and no way for the page
+to drift from the service it is reading. `Dockerfile` copies an already-built binary rather than
+compiling inside the image, because a Rust release build in a thin image recompiles dependencies
+that are already compiled here and produces the same artefact.
+
+```bash
+cargo build --release                # produces target/release/vericall
+cd web && pnpm install && pnpm build # produces web/dist
+cd ..
+
+flyctl apps create vericall
+flyctl volumes ...                   # not needed: the deployment is stateless
+
+# The verifier's key is a secret; it is never an argument, and never in the image.
+flyctl secrets set VERICALL_VERIFIER_KEY=… --app vericall
+
+flyctl deploy --ha=false --app vericall
+```
+
+Environment for the deployment lives in `fly.toml` and is only facts that are already public: the
+network, the contract address, the three watched addresses, the covenant record path, and the public
+base URL. The one secret is the verifier key, and the README says what it can and cannot do.
+
 ## Mocked versus real
 
 Being precise about this matters more than the claim it protects.
