@@ -84,6 +84,23 @@ The dependency's row is the product thesis in one line. It started with dust and
 
 The order ledger does not get its transaction hashes from the scripts that ran them. The verifier scans the contract's own `OrderCreated`, `OrderSettled` and `OrderReclaimed` events, chunked under Arc's 10,000-block `eth_getLogs` cap, starting from the deploy block recorded in `deployments/`. So the links a reader clicks are derived from the chain, and a settlement that happened without this project's involvement would appear too.
 
+### The caller's escape hatch, also on mainnet
+
+Two orders were left funded during testing when the deliberately-interrupted runs
+stopped before settling — which is exactly the situation the reclaim path exists
+for. Once their windows closed, anyone could send the escrow home; it can only ever
+go to the original caller, and it needs nobody's cooperation:
+
+| Order | What happened | Transaction |
+| --- | --- | --- |
+| 9 | 0.08 USDC returned to the caller after its window closed | [`0x97518d7b…`](https://explorer.arc.io/tx/0x97518d7bc59c5272a1e230ffad18fe2e3768f95191476764274ece10397ef99a) |
+| 10 | 0.08 USDC returned to the caller after its window closed | [`0xd64aa0d7…`](https://explorer.arc.io/tx/0xd64aa0d75f80afdb846f883bae88e93d3a223bf875d6daec326a3ecdaed45d6d) |
+
+So the contract has been exercised on all four of its terminal outcomes — paid out,
+rebated, refunded with a penalty, and reclaimed — with real money, and the final
+state holds no floating escrow at all: `totalEscrowed()` is zero and the only USDC
+inside the contract is the 0.3975 staked across the five active covenants.
+
 ### Verified independently, without a key
 
 ```
