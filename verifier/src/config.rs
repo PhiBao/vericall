@@ -79,6 +79,10 @@ pub struct Config {
     pub settlement_chain_id: u64,
     /// Deployment record describing the covenants this verifier may attest to.
     pub covenants_path: Option<std::path::PathBuf>,
+    /// The block the clearinghouse was deployed in. Settlement transactions are
+    /// found by scanning events from here; without it the ledger still reads
+    /// correctly, it just cannot offer a link to click.
+    pub deploy_block: Option<u64>,
 }
 
 impl Config {
@@ -141,6 +145,17 @@ impl Config {
 
         let covenants_path = env_str("VERICALL_COVENANTS").map(PathBuf::from);
 
+        // Prefer the deployment record's own block, so the scan starts where the
+        // contract's history does rather than at genesis.
+        let deploy_block = match env_str("VERICALL_DEPLOY_BLOCK") {
+            Some(value) => Some(value.parse::<u64>().map_err(|e| format!("VERICALL_DEPLOY_BLOCK: {e}"))?),
+            None => covenants_path
+                .as_ref()
+                .and_then(|path| std::fs::read_to_string(path).ok())
+                .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
+                .and_then(|json| json.get("deployBlock").and_then(|value| value.as_u64())),
+        };
+
         Ok(Self {
             network,
             rpcs,
@@ -153,6 +168,7 @@ impl Config {
             public_base_url,
             settlement_chain_id,
             covenants_path,
+            deploy_block,
         })
     }
 

@@ -7,6 +7,8 @@ import { Masthead } from "./components/Masthead";
 import { Orientation } from "./components/Orientation";
 import { SlaWorkbench } from "./components/SlaWorkbench";
 import { ProofLedger } from "./components/ProofLedger";
+import { OrdersTable } from "./components/OrdersTable";
+import { ServicesTable } from "./components/ServicesTable";
 import { Footer } from "./components/Footer";
 
 /** How often the ledger is re-read while the tab is visible. */
@@ -121,6 +123,63 @@ export function App() {
           refreshing={refreshing}
           onRefresh={refreshLedger}
         />
+        {/*
+          The order ledger gets the full width. Every column is money or time —
+          latency, escrow, rebate, provider, dependencies, penalty — and those
+          are meant to be compared down a column, which a side panel cannot do.
+        */}
+        <section className="panel panel--ledger" aria-labelledby="covenants-heading">
+          <div className="panel__head">
+            <h2 className="panel__title" id="covenants-heading">
+              Published covenants
+            </h2>
+            <span className="panel__note">
+              what each service promised: price, grace and hard latency, the rebate it will pay, and
+              who shares the proceeds — read from the contract
+            </span>
+          </div>
+          <div className="panel__body">
+            {ledgerError ? (
+              <p className="banner banner--error" role="alert">
+                The ledger could not be read from Arc: {ledgerError}
+              </p>
+            ) : ledger ? (
+              <ServicesTable services={ledger.services} explorer={ledger.explorer} />
+            ) : (
+              <p className="small muted">
+                <span className="spinner" aria-hidden="true" /> Reading the clearinghouse from Arc…
+              </p>
+            )}
+          </div>
+        </section>
+
+        <section className="panel panel--ledger" aria-labelledby="orders-heading">
+          <div className="panel__head">
+            <h2 className="panel__title" id="orders-heading">
+              Settled orders
+            </h2>
+            <span className="panel__note">
+              every amount read from the clearinghouse, not from this page&rsquo;s state
+            </span>
+          </div>
+          <div className="panel__body">
+            {ledgerError ? (
+              <p className="banner banner--error" role="alert">
+                The ledger could not be read from Arc: {ledgerError}
+              </p>
+            ) : ledger ? (
+              <OrdersTable
+                orders={ledger.orders}
+                services={ledger.services}
+                explorer={ledger.explorer}
+              />
+            ) : (
+              <p className="small muted">
+                <span className="spinner" aria-hidden="true" /> Reading the clearinghouse from Arc…
+              </p>
+            )}
+          </div>
+        </section>
       </main>
       <Footer config={config} health={health} ledger={ledger} />
     </div>

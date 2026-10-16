@@ -60,6 +60,10 @@ Order 4 is the one to check first if you are reviewing: its attestation was prod
 
 The dependency's row is the product thesis in one line. It started with dust and holds 0.19 USDC now, because every successful call that used it paid it 20% or 30% of the price in the same transaction that paid the provider — no invoice, no monthly reconciliation, no custodian. Paying a contributor a 0.03 USDC share of a 0.15 USDC call is impossible on card rails and uneconomic on most chains; here it cost about 0.0001 USDC to include.
 
+### The transactions are found from the chain, not remembered
+
+The order ledger does not get its transaction hashes from the scripts that ran them. The verifier scans the contract's own `OrderCreated`, `OrderSettled` and `OrderReclaimed` events, chunked under Arc's 10,000-block `eth_getLogs` cap, starting from the deploy block recorded in `deployments/`. So the links a reader clicks are derived from the chain, and a settlement that happened without this project's involvement would appear too.
+
 ### Verified independently, without a key
 
 ```
@@ -247,6 +251,8 @@ Nothing in the product's claims depends on a simulated component behaving like a
 **Permission model.** The registration authority may publish covenants on a provider's behalf, but a bond is always pulled from the provider's own wallet, so the operator never holds anyone's stake. Only the provider can withdraw stake, and only once its service is delisted with no open order — an open order is a promise a caller paid for. Only the provider or the authority may change the verifier or delist a service, and delisting does not cancel funded orders: they still settle or expire.
 
 **Attestation surface.** An attestation is bound to one order, one service, a latency, a schema verdict, a response hash and a deadline, under a domain separator that includes the chain id and the contract address. Signatures are checked for the low-`s` malleability bound; a replay on another order, another provider or after the deadline is rejected. The tests exercise each of those rejections explicitly.
+
+**The request the verdict is about is the request the caller wrote down.** An order stores `keccak256(endpoint ‖ "\n" ‖ body)`, and the verifier refuses to sign unless the bytes it is about to send hash to that value. This closes a real economic attack: without it, a caller could create an order and then point the verifier at *any* request — including one chosen to be slow or malformed — collect the breach refund, and take the provider's bond. The verifier's refusal names both hashes, so a mismatch is diagnosable rather than mysterious. `scripts/settle.ts` sends the bytes recorded at order time, and that record is checked against the chain when it is written.
 
 **Denial of service.** The blocklist-safe payout path means a restricted recipient cannot freeze a settlement. A verifier that never settles cannot trap funds: `reclaimExpiredOrder` is permissionless after the deadline and pays only the original caller. `createOrder` requires the provider's bond to cover one order's penalty, so an unfunded promise is refused at the point of sale rather than discovered at breach.
 

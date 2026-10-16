@@ -60,6 +60,7 @@ async function main() {
     network: deployment.network,
     chainId: deployment.chainId,
     contract: deployment.contract,
+    deployBlock: deployment.blockNumber,
     covenants: [],
   };
 

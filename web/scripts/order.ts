@@ -15,8 +15,11 @@ import {
   arg,
   loadCovenants,
   loadDeployment,
+  loadRequests,
   log,
+  saveRequests,
   section,
+  type RequestRecord,
 } from "./lib/files.ts";
 import { explorerTx, network, reader, sendTransaction, signerFromEnv } from "./lib/chain.ts";
 import { CLEARINGHOUSE_ABI, ERC20_ABI, STATUS_NAME, USDC_ADDRESS } from "./lib/abi.ts";
@@ -35,20 +38,26 @@ async function main() {
 
   const caller = signerFromEnv("DEPLOYER_KEY");
 
-  // The request body the verifier will send. Committing to its hash up front is
-  // what ties the eventual attestation to this order and no other.
+  // The exact bytes the verifier will send. They are hashed together with the
+  // endpoint, committed onchain, and recorded here so the verifier can later
+  // prove it is about to send the request this order names rather than some
+  // other one.
+  const mode = arg("mode", "normal")!;
   const requestBody =
     arg("request") ??
     JSON.stringify({
       counterparty: "0x4AB5e7F2b5464B9494b49EFE41C2f00e7bcfE555",
       purpose: "release a milestone payment",
+      mode,
     });
-  const requestHash = keccak256(toHex(requestBody));
+  const endpointUri = `${process.env.VERICALL_PUBLIC_BASE_URL ?? "http://localhost:8787"}${record.endpointUri.replace(/^https?:\/\/[^/]+/, "")}`;
+  const requestHash = keccak256(toHex(`${endpointUri}\n${requestBody}`));
 
   section(`Escrowing a ${slug} call on ${net.label}`);
   log(`  service   ${record.serviceId} · ${record.name}`);
   log(`  price     ${record.callPriceUsdc} USDC`);
   log(`  caller    ${caller.address}`);
+  log(`  endpoint  ${endpointUri}`);
   log(`  request   ${requestBody}`);
   log(`  req hash  ${requestHash}`);
   log(`  ttl       ${ttl}s`);
@@ -91,6 +100,40 @@ async function main() {
     functionName: "getOrderCount",
   });
   const orderId = orderCount as bigint;
+  // Record the request so the settle step can send exactly these bytes.
+  const onchainHash = keccak256(toHex(`${endpointUri}\n${requestBody}`));
+  const stored = await client.readContract({
+    address: deployment.contract,
+    abi: CLEARINGHOUSE_ABI,
+    functionName: "getOrder",
+    args: [orderId],
+  });
+  if (stored.requestHash.toLowerCase() !== onchainHash.toLowerCase()) {
+    throw new Error(
+      `the order stored ${stored.requestHash} but this script hashed ${onchainHash}; refusing to record a request that does not match the chain`,
+    );
+  }
+  let requestFile;
+  try {
+    requestFile = loadRequests(key);
+  } catch {
+    requestFile = { network: net.label, requests: [] };
+  }
+  const record_entry: RequestRecord = {
+    orderId: orderId.toString(),
+    slug,
+    mode,
+    body: requestBody,
+    endpointUri,
+    requestHash: onchainHash,
+    createdAt: new Date().toISOString(),
+  };
+  requestFile.requests = [
+    ...requestFile.requests.filter((r) => r.orderId !== record_entry.orderId),
+    record_entry,
+  ];
+  saveRequests(key, requestFile);
+
   const order = await client.readContract({
     address: deployment.contract,
     abi: CLEARINGHOUSE_ABI,

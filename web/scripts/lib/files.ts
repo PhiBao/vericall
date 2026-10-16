@@ -22,6 +22,41 @@ export function covenantPath(networkKey: string): string {
   return join(deploymentsDir, `covenants-${networkKey}.json`);
 }
 
+export function requestPath(networkKey: string): string {
+  return join(deploymentsDir, `requests-${networkKey}.json`);
+}
+
+/**
+ * The request body a caller committed to for one order.
+ *
+ * The order stores `keccak256(endpoint || "\n" || body)`, and the verifier
+ * refuses to attest unless the bytes it is about to send hash to the same value.
+ * Keeping the exact bytes here is what makes that check pass — and what makes it
+ * a check rather than a formality.
+ */
+export interface RequestRecord {
+  orderId: string;
+  slug: string;
+  mode: string;
+  body: string;
+  endpointUri: string;
+  requestHash: `0x${string}`;
+  createdAt: string;
+}
+
+export interface RequestFile {
+  network: string;
+  requests: RequestRecord[];
+}
+
+export function loadRequests(networkKey: string): RequestFile {
+  return readJson<RequestFile>(requestPath(networkKey), `${networkKey} request record`);
+}
+
+export function saveRequests(networkKey: string, file: RequestFile): void {
+  writeJson(requestPath(networkKey), file);
+}
+
 export interface Deployment {
   network: string;
   chainId: number;
@@ -61,6 +96,8 @@ export interface CovenantFile {
   network: string;
   chainId: number;
   contract: `0x${string}`;
+  /** The block the clearinghouse was deployed in, so event scans can start there. */
+  deployBlock?: number;
   covenants: CovenantRecord[];
 }
 

@@ -140,7 +140,14 @@ export interface ExecuteArgs {
   mode?: "normal" | "degraded" | "breach";
   serviceId?: number;
   orderId?: string;
-  /** Force a specific timeout so a breach can be produced by an unrushed caller. */
+  /**
+   * The request body exactly as the caller committed it onchain. Required when
+   * `orderId` is set: the verifier refuses to attest to a request the order does
+   * not name, because otherwise anyone could point an order at a request they
+   * knew would breach and collect the provider's bond.
+   */
+  bodyRaw?: string;
+  /** How long the attestation stays valid. Defaults to 900 seconds. */
   validForSeconds?: number;
 }
 
@@ -152,6 +159,7 @@ export function execute(args: ExecuteArgs): Promise<ExecutionResult> {
       mode: args.mode ?? "normal",
       service_id: args.serviceId,
       order_id: args.orderId,
+      body_raw: args.bodyRaw,
       valid_for_seconds: args.validForSeconds,
     }),
   });

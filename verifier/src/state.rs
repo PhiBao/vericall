@@ -20,6 +20,32 @@ use serde::Serialize;
 pub const MAX_SERVICES: u64 = 24;
 pub const MAX_ORDERS: u64 = 60;
 
+/// Arc's public RPCs reject an `eth_getLogs` span of 10,000 blocks or more, so
+/// every scan is chunked below that. The same limit is why the ledger reads
+/// state through view functions and only reaches for logs to find transaction
+/// hashes — the one thing storage does not carry.
+pub const MAX_LOG_SPAN: u64 = 9_000;
+
+/// Where a transaction for an order can be found.
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct OrderTxs {
+    pub created: Option<String>,
+    pub settled: Option<String>,
+    pub reclaimed: Option<String>,
+    pub block_number: Option<u64>,
+}
+
+impl OrderTxs {
+    /// The most informative link for a row: settlement if it happened, else the
+    /// reclaim, else creation.
+    pub fn primary(&self) -> Option<&String> {
+        self.settled
+            .as_ref()
+            .or(self.reclaimed.as_ref())
+            .or(self.created.as_ref())
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct ChainStatus {
     pub network: String,
@@ -63,6 +89,9 @@ pub struct SplitView {
 #[derive(Debug, Clone, Serialize)]
 pub struct OrderView {
     pub id: String,
+    /// Transaction links, found by scanning the contract's own events from its
+    /// deploy block. `null` means the scan has not covered it, never a guess.
+    pub txs: OrderTxs,
     pub service_id: String,
     pub caller: String,
     pub escrowed_usdc: String,
@@ -176,10 +205,27 @@ pub async fn read_ledger(
         }
     }
 
+    // Transaction hashes are the one fact not in storage, and they are what a
+    // reader clicks. Scanning from the deploy block keeps this cheap: the chain
+    // is only a few thousand blocks past it, so it is one chunk, not a walk.
+    let txs = match cfg.deploy_block {
+        Some(from_block) => match scan_order_txs(eth, &contract_hex, from_block).await {
+            Ok(map) => map,
+            Err(err) => {
+                tracing::warn!("could not scan settlement events: {err}");
+                std::collections::BTreeMap::new()
+            }
+        },
+        None => std::collections::BTreeMap::new(),
+    };
+
     let mut orders = Vec::with_capacity(order_total as usize);
     for id in 1..=order_total {
         match read_order(eth, &contract_hex, id).await {
-            Ok(view) => orders.push(view),
+            Ok(mut view) => {
+                view.txs = txs.get(&id).cloned().unwrap_or_default();
+                orders.push(view)
+            }
             Err(err) => tracing::warn!("order {id} could not be read: {err}"),
         }
     }
@@ -317,6 +363,23 @@ pub async fn read_service_raw(
     })
 }
 
+/// Read an order raw, for checks that need the caller's onchain commitment.
+pub async fn read_order_raw(
+    eth: &HttpEth,
+    contract: &str,
+    id: U256,
+) -> Result<crate::abi::OrderReturn, ChainError> {
+    let call = abi::VeriCallClearinghouse::getOrderCall { orderId: id };
+    let raw = eth
+        .eth_call(contract, &alloy_sol_types::SolCall::abi_encode(&call))
+        .await?;
+    crate::abi::decode_order(&raw.value).map_err(|e| ChainError::Decode {
+        endpoint: raw.endpoint.clone(),
+        method: "getOrder".into(),
+        message: e,
+    })
+}
+
 pub async fn read_service(eth: &HttpEth, contract: &str, id: u64) -> Result<ServiceView, ChainError> {
     let call = abi::VeriCallClearinghouse::getServiceCall {
         serviceId: U256::from(id),
@@ -406,6 +469,7 @@ async fn read_order(eth: &HttpEth, contract: &str, id: u64) -> Result<OrderView,
 
     Ok(OrderView {
         id: id.to_string(),
+        txs: OrderTxs::default(),
         service_id: order.service_id.to_string(),
         caller: format!("0x{}", hex::encode(order.caller)),
         escrowed_usdc: abi::format_usdc(order.escrowed_usdc),
@@ -425,6 +489,71 @@ async fn read_order(eth: &HttpEth, contract: &str, id: u64) -> Result<OrderView,
         settlement_total_usdc: abi::format_usdc(total + order.bond_slashed),
         settled,
     })
+}
+
+/// Find the transactions behind each order by scanning the contract's events.
+///
+/// Chunked, because Arc's public RPCs refuse a span of 10,000 blocks; the topics
+/// are the contract's own event signatures, so a decode failure means the
+/// deployment is not the contract we think it is.
+pub async fn scan_order_txs(
+    eth: &HttpEth,
+    contract: &str,
+    from_block: u64,
+) -> Result<std::collections::BTreeMap<u64, OrderTxs>, ChainError> {
+    let latest = eth.block_number().await?.value;
+    let mut out: std::collections::BTreeMap<u64, OrderTxs> = std::collections::BTreeMap::new();
+
+    const ORDER_CREATED: &str = "OrderCreated(uint256,uint256,address)";
+    const ORDER_SETTLED: &str = "OrderSettled(uint256,uint8,uint32,bool,bytes32,uint256,uint256,uint256,uint256)";
+    const ORDER_RECLAIMED: &str = "OrderReclaimed(uint256,address)";
+
+    let created_topic = format!("0x{}", hex::encode(crate::eip712::keccak256(ORDER_CREATED.as_bytes())));
+    let settled_topic = format!("0x{}", hex::encode(crate::eip712::keccak256(ORDER_SETTLED.as_bytes())));
+    let reclaimed_topic = format!("0x{}", hex::encode(crate::eip712::keccak256(ORDER_RECLAIMED.as_bytes())));
+
+    let mut start = from_block;
+    while start <= latest {
+        let end = (start + MAX_LOG_SPAN - 1).min(latest);
+        for (topic, kind) in [
+            (&created_topic, "created"),
+            (&settled_topic, "settled"),
+            (&reclaimed_topic, "reclaimed"),
+        ] {
+            let logs = match eth.logs(contract, start, end, vec![serde_json::json!(topic)]).await {
+                Ok(logs) => logs.value,
+                Err(err) => {
+                    // A failed chunk is a gap in the links, not a reason to
+                    // withhold the ledger. Record it and keep going.
+                    tracing::warn!("log scan {start}..={end} for {kind} failed: {err}");
+                    continue;
+                }
+            };
+            for log in logs {
+                let Some(order_topic) = log.topics.get(1) else { continue };
+                let Ok(order_id) = u64::from_str_radix(order_topic.trim_start_matches("0x"), 16) else {
+                    continue;
+                };
+                let Ok(block) = u64::from_str_radix(log.block_number.trim_start_matches("0x"), 16) else {
+                    continue;
+                };
+                let entry = out.entry(order_id).or_default();
+                match kind {
+                    "created" => entry.created = Some(log.transaction_hash.clone()),
+                    "settled" => {
+                        entry.settled = Some(log.transaction_hash.clone());
+                        entry.block_number = Some(block);
+                    }
+                    _ => {
+                        entry.reclaimed = Some(log.transaction_hash.clone());
+                        entry.block_number = Some(block);
+                    }
+                }
+            }
+        }
+        start = end + 1;
+    }
+    Ok(out)
 }
 
 /// Read `version()` as a liveness probe that the contract is the one we expect.

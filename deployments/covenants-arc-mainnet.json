@@ -2,6 +2,7 @@
   "network": "Arc",
   "chainId": 5042,
   "contract": "0xb980fa2a21b09a7304da285187f67daf55600619",
+  "deployBlock": 26265144,
   "covenants": [
     {
       "slug": "risk-scorer",
@@ -10,7 +11,7 @@
       "verifier": "0x0382bca3Fc934169a43c7ebe1Ee4B4d6A69C1e67",
       "dependency": "0x0382bca3Fc934169a43c7ebe1Ee4B4d6A69C1e67",
       "name": "Counterparty Risk Scorer",
-      "endpointUri": "https://vericall.fly.dev/mock/risk-scorer",
+      "endpointUri": "http://localhost:8787/mock/risk-scorer",
       "schemaHash": "0x1ec6b5b30f7fe233f25d34e3df469ed1efe19c784d72cc20d70d78de47401fa1",
       "callPriceUsdc": "0.2",
       "graceLatencyMs": 500,
@@ -19,8 +20,8 @@
       "slashPenaltyBps": 2000,
       "providerBps": 8000,
       "initialBondUsdc": "0.05",
-      "registeredAt": "2026-10-16T13:03:20.295Z",
-      "txHash": "0x823f492b5430f3feb4e9c78ea1a2d33ab845ea7fbea39e7f552aa8fcf589f712"
+      "registeredAt": "",
+      "txHash": "0x"
     },
     {
       "slug": "invoice-parser",
@@ -29,7 +30,7 @@
       "verifier": "0x0382bca3Fc934169a43c7ebe1Ee4B4d6A69C1e67",
       "dependency": "0x0382bca3Fc934169a43c7ebe1Ee4B4d6A69C1e67",
       "name": "Invoice Field Extractor",
-      "endpointUri": "https://vericall.fly.dev/mock/invoice-parser",
+      "endpointUri": "http://localhost:8787/mock/invoice-parser",
       "schemaHash": "0xdc83a3766057f0b1aa1c08d30a825cea1f917e4bd44b2ec9f06da8ae2ecf16a7",
       "callPriceUsdc": "0.15",
       "graceLatencyMs": 400,
@@ -38,8 +39,8 @@
       "slashPenaltyBps": 2500,
       "providerBps": 7000,
       "initialBondUsdc": "0.05",
-      "registeredAt": "2026-10-16T13:03:21.485Z",
-      "txHash": "0x18091538bd45b6a8432c63939c928d407594e8d2f52dca90e13785884300cde7"
+      "registeredAt": "",
+      "txHash": "0x"
     },
     {
       "slug": "ast-auditor",
@@ -48,7 +49,7 @@
       "verifier": "0x0382bca3Fc934169a43c7ebe1Ee4B4d6A69C1e67",
       "dependency": "0x0382bca3Fc934169a43c7ebe1Ee4B4d6A69C1e67",
       "name": "Contract Surface Auditor",
-      "endpointUri": "https://vericall.fly.dev/mock/ast-auditor",
+      "endpointUri": "http://localhost:8787/mock/ast-auditor",
       "schemaHash": "0xc307f0c36ceb24ea3fa3943390335d083053ffac5d2ce471648308af2c598e85",
       "callPriceUsdc": "0.5",
       "graceLatencyMs": 1000,
@@ -57,8 +58,8 @@
       "slashPenaltyBps": 1500,
       "providerBps": 9000,
       "initialBondUsdc": "0.08",
-      "registeredAt": "2026-10-16T13:03:22.793Z",
-      "txHash": "0x096db2aa13f801afe959b8f094e491636468c3dc81e1c8a50eea04e3267d68ec"
+      "registeredAt": "",
+      "txHash": "0x"
     }
   ]
 }

@@ -1,7 +1,5 @@
 import type { LedgerView } from "../types";
 import { Balances } from "./Balances";
-import { OrdersTable } from "./OrdersTable";
-import { ServicesTable } from "./ServicesTable";
 import { addressLink, groupInt, usdcFixed } from "../format";
 
 interface ProofLedgerProps {
@@ -12,12 +10,15 @@ interface ProofLedgerProps {
 }
 
 /**
- * The proof ledger.
+ * The clearing record: the invariant, the chain it was read from, and the
+ * balances.
  *
- * One panel read top to bottom, like a printed clearing record: the invariant
- * first, then the chain it was read from, then orders, balances and covenants.
- * Every figure is a view call on the deployed contract; when the read fails the
- * ledger says so and stays empty.
+ * What lives here is what reads well in a column — a verdict, the facts of a
+ * read, and three addresses with their two USDC balances. The tables that want
+ * width and comparison (the covenants and the settled orders) live in their own
+ * full-width bands below. Every figure is a view call on the deployed contract;
+ * when a read fails the panel says so and stays empty rather than showing a
+ * plausible number.
  */
 export function ProofLedger({ ledger, error, refreshing, onRefresh }: ProofLedgerProps) {
   const contractLink = ledger ? addressLink(ledger.explorer, ledger.contract) : null;
@@ -133,16 +134,8 @@ export function ProofLedger({ ledger, error, refreshing, onRefresh }: ProofLedge
             </div>
 
             <hr className="hairline" />
-            <h3 className="fact__label">Orders</h3>
-            <OrdersTable orders={ledger.orders} services={ledger.services} explorer={ledger.explorer} />
-
-            <hr className="hairline" />
             <h3 className="fact__label">Watched balances</h3>
             <Balances balances={ledger.balances} explorer={ledger.explorer} />
-
-            <hr className="hairline" />
-            <h3 className="fact__label">Covenants</h3>
-            <ServicesTable services={ledger.services} explorer={ledger.explorer} />
 
             <p className="tiny muted">
               USDC ERC-20 at <code>{ledger.usdc}</code> (6 decimals). Native gas is 18-decimal USDC

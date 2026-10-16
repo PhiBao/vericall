@@ -75,7 +75,11 @@ export function OrdersTable({ orders, services, explorer }: OrdersTableProps) {
           {orders.map((order) => {
             const verdict = verdictOfStatus(order.status);
             const expanded = open.has(order.id);
-            const link = txLink(explorer, order.tx_hash ?? null);
+            // The chain is the source of truth for where a transaction is: the
+            // settlement event names the hash, so a row links to the block that
+            // moved the money rather than to a hash remembered on this machine.
+            const hash = order.txs?.settled ?? order.txs?.reclaimed ?? order.txs?.created ?? null;
+            const link = txLink(explorer, hash);
             const dash = <span className="muted">—</span>;
             return (
               <Fragment key={order.id}>
@@ -120,10 +124,14 @@ export function OrdersTable({ orders, services, explorer }: OrdersTableProps) {
                   <td data-label="Tx">
                     {link ? (
                       <a href={link} target="_blank" rel="noreferrer noopener" className="mono">
-                        {shortHash(order.tx_hash ?? "", 6)} ↗
+                        {shortHash(hash ?? "", 6)} ↗
                       </a>
+                    ) : order.settled ? (
+                      <span className="muted tiny" title="the event scan did not reach this order">
+                        not indexed
+                      </span>
                     ) : (
-                      <span className="muted tiny">not recorded</span>
+                      <span className="muted tiny">in escrow</span>
                     )}
                   </td>
                 </tr>

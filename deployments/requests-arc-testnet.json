@@ -1,0 +1,41 @@
+{
+  "network": "Arc Testnet",
+  "requests": [
+    {
+      "orderId": "7",
+      "slug": "risk-scorer",
+      "mode": "normal",
+      "body": "{\"counterparty\":\"0x4AB5e7F2b5464B9494b49EFE41C2f00e7bcfE555\",\"purpose\":\"release a milestone payment\",\"mode\":\"normal\"}",
+      "endpointUri": "http://localhost:8787/mock/risk-scorer",
+      "requestHash": "0x018568c6edab80a655bc4e80076d8cecf1bf527abf9a7dbf29913ab78293bef6",
+      "createdAt": "2026-10-16T13:14:30.224Z"
+    },
+    {
+      "orderId": "8",
+      "slug": "risk-scorer",
+      "mode": "normal",
+      "body": "{\"counterparty\":\"0x4AB5e7F2b5464B9494b49EFE41C2f00e7bcfE555\",\"purpose\":\"demo/normal\",\"mode\":\"normal\"}",
+      "endpointUri": "http://localhost:8787/mock/risk-scorer",
+      "requestHash": "0xa3e008c1e27ef01cdfda17a92b86272426bbe8c07a0eecd773ab63ca4ea24028",
+      "createdAt": "2026-10-16T13:15:19.715Z"
+    },
+    {
+      "orderId": "9",
+      "slug": "risk-scorer",
+      "mode": "degraded",
+      "body": "{\"counterparty\":\"0x4AB5e7F2b5464B9494b49EFE41C2f00e7bcfE555\",\"purpose\":\"demo/degraded\",\"mode\":\"degraded\"}",
+      "endpointUri": "http://localhost:8787/mock/risk-scorer",
+      "requestHash": "0xbb5000af5e2cbb8c1ea4af707ab57f33b21a6d8bee5f3f4806152d4c971372e1",
+      "createdAt": "2026-10-16T13:15:27.856Z"
+    },
+    {
+      "orderId": "10",
+      "slug": "risk-scorer",
+      "mode": "breach",
+      "body": "{\"counterparty\":\"0x4AB5e7F2b5464B9494b49EFE41C2f00e7bcfE555\",\"purpose\":\"demo/breach\",\"mode\":\"breach\"}",
+      "endpointUri": "http://localhost:8787/mock/risk-scorer",
+      "requestHash": "0xceae37c82ebae4c368696196798a348c8db8979ebc6d36ace9d95857a5981b11",
+      "createdAt": "2026-10-16T13:15:43.783Z"
+    }
+  ]
+}

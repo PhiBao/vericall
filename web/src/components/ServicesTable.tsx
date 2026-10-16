@@ -26,7 +26,7 @@ export function ServicesTable({ services, explorer }: ServicesTableProps) {
   return (
     <div className="table-wrap">
       <table className="table table--stack table--services">
-        <caption>Covenants registered on the clearinghouse — scrolls sideways in a narrow column</caption>
+        <caption>Covenants registered on the clearinghouse — what each service published</caption>
         <thead>
           <tr>
             <th scope="col">Service</th>

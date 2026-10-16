@@ -44,8 +44,17 @@ export interface ServiceView {
   bond_covers_one_order: boolean;
 }
 
+export interface OrderTxs {
+  created: string | null;
+  settled: string | null;
+  reclaimed: string | null;
+  block_number: number | null;
+}
+
 export interface OrderView {
   id: string;
+  /** Where to find this order's transactions, scanned from the contract's events. */
+  txs?: OrderTxs;
   service_id: string;
   caller: string;
   escrowed_usdc: string;

@@ -556,6 +556,13 @@ input[type="range"] {
   white-space: normal;
 }
 
+/* Reserves the marker column in the RPC list. */
+.rpc__mark {
+  display: inline-block;
+  width: 1.2ch;
+  color: var(--verified-ink);
+}
+
 /* ------------------------------------------------------------ oscilloscope */
 
 .trace {
@@ -1171,3 +1178,9 @@ details[open] > summary {
   }
 }
 
+
+/* The order ledger spans the workbench grid: its columns are money and time, and
+   a comparison across rows only works at full width. */
+.panel--ledger {
+  grid-column: 1 / -1;
+}

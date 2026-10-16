@@ -75,9 +75,13 @@ export function Footer({ config, health, ledger }: FooterProps) {
               {(config?.rpcs ?? []).length > 0 ? (
                 <div className="stack--tight">
                   {(config?.rpcs ?? []).map((rpc) => (
-                    <span key={rpc} className="mono small">
-                      {rpc === answered ? "▸ " : "  "}
-                      {rpc}
+                    <span key={rpc} className="wrap-anywhere">
+                      {/* A fixed-width marker keeps the list aligned without
+                          relying on whitespace, which flex collapses. */}
+                      <span className="rpc__mark" aria-hidden="true">
+                        {rpc === answered ? "▸" : ""}
+                      </span>
+                      <span className="mono small">{rpc}</span>
                       {rpc === answered ? <span className="tiny muted"> answered</span> : null}
                     </span>
                   ))}

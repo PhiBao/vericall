@@ -603,6 +603,12 @@ struct ExecuteRequest {
     url: Option<String>,
     #[serde(default)]
     body: Option<serde_json::Value>,
+    /// The request body exactly as the caller committed to it onchain. When
+    /// present it is sent verbatim — not re-serialised — because the order's
+    /// `requestHash` is a hash of these exact bytes, and a different
+    /// serialisation is a different request.
+    #[serde(default)]
+    body_raw: Option<String>,
     /// Deterministic seed for the mock services so a demo repeats exactly.
     #[serde(default)]
     seed: Option<u64>,
@@ -773,6 +779,80 @@ async fn execute(State(app): State<App>, Json(req): Json<ExecuteRequest>) -> Res
 
     // ---- execute the call ---------------------------------------------------
     let registered_url = format!("{}{}", app.cfg.mock_base_url(), fixture.path);
+
+    // The body the call will carry, fixed once. `body_raw` is the byte-exact form
+    // the caller hashed into the order; without it the body is built from the
+    // fixture, and a mode is folded in as a body field so the caller's own
+    // choice of request is what ends up committed.
+    let body_verbatim = match &req.body_raw {
+        Some(raw) => raw.clone(),
+        None => {
+            let mut body = req
+                .body
+                .clone()
+                .unwrap_or_else(|| default_body(fixture.slug, req.mode.as_deref(), req.seed));
+            if let Some(obj) = body.as_object_mut() {
+                if let Some(mode) = &req.mode {
+                    obj.insert("mode".into(), serde_json::json!(mode));
+                }
+            }
+            serde_json::to_string(&body).unwrap_or_default()
+        }
+    };
+
+    // ---- the request must be the one the order commits to ------------------
+    //
+    // An order stores `keccak256(url || "\n" || body)`. Without checking it, the
+    // verifier would attest to *some* call and the contract would settle *this*
+    // order — anyone could point an order at a pathological request, harvest a
+    // breach, and take the provider's bond. Binding the attestation to the
+    // caller's own onchain commitment removes that lever: the caller chooses the
+    // request, and the request it is judged on is the one it wrote down.
+    let order_request_hash = if let Some(order_id) = req.order_id.as_ref().and_then(|raw| raw.parse::<U256>().ok()) {
+        match app.cfg.contract {
+            Some(contract) => {
+                let contract_hex = format!("0x{}", hex::encode(contract));
+                let order = match state::read_order_raw(&app.eth, &contract_hex, order_id).await {
+                    Ok(order) => order,
+                    Err(err) => {
+                        return problem(
+                            StatusCode::BAD_GATEWAY,
+                            format!("could not read order {order_id} from the chain: {err}"),
+                        )
+                    }
+                };
+                if order.id.is_zero() {
+                    return problem(
+                        StatusCode::BAD_REQUEST,
+                        format!("order {order_id} does not exist on {}", app.cfg.network.label()),
+                    );
+                }
+                let computed = executor::keccak256(&executor::request_commitment_input(
+                    &registered_url,
+                    &body_verbatim,
+                ));
+                if computed != order.request_hash {
+                    return problem(
+                        StatusCode::CONFLICT,
+                        format!(
+                            "refusing to attest: the request this verifier would send hashes to 0x{}, but order {order_id} committed to 0x{}. The verifier cannot settle an order with a request the caller did not write down.",
+                            hex::encode(computed),
+                            hex::encode(order.request_hash)
+                        ),
+                    );
+                }
+                notes.push(format!(
+                    "the request matches order {order_id}'s onchain commitment (0x{}…)",
+                    &hex::encode(order.request_hash)[..12]
+                ));
+                Some(order.request_hash)
+            }
+            None => None,
+        }
+    } else {
+        None
+    };
+
     let url = req.url.clone().unwrap_or_else(|| registered_url.clone());
     if url != registered_url && req.url.is_some() {
         // An override is allowed only when it is the endpoint the covenant names.
@@ -785,21 +865,10 @@ async fn execute(State(app): State<App>, Json(req): Json<ExecuteRequest>) -> Res
         );
     }
 
-    let mut body = req
-        .body
-        .clone()
-        .unwrap_or_else(|| default_body(fixture.slug, req.mode.as_deref(), req.seed));
-    if let Some(obj) = body.as_object_mut() {
-        if let Some(mode) = &req.mode {
-            obj.insert("mode".into(), serde_json::json!(mode));
-        }
-    }
-    let body_str = serde_json::to_string(&body).unwrap_or_default();
-
     let call = executor::CallRequest {
         url: url.clone(),
         method: executor::Method::Post,
-        body: Some(body_str),
+        body: Some(body_verbatim.clone()),
         headers: vec![("x-vericall-fixture".into(), fixture.slug.into())],
         // Give the service enough room to answer at or past the hard edge; a
         // timeout must be a measured breach, not a client-side abort at the SLA.
@@ -1016,6 +1085,9 @@ async fn execute(State(app): State<App>, Json(req): Json<ExecuteRequest>) -> Res
         })
     };
 
+    if order_request_hash.is_some() && app.cfg.contract.is_some() {
+        notes.push("the attestation is bound to the request the caller committed to onchain".to_string());
+    }
     if !app.cfg.enable_mock_services && req.url.is_none() {
         notes.push("built-in services are disabled; supply a `url` that matches the covenant".to_string());
     }

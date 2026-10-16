@@ -17,7 +17,7 @@
  *   DEPLOYER_KEY=… node scripts/settle.ts --order 1 --service risk-scorer --mode degraded
  */
 
-import { arg, flag, loadCovenants, loadDeployment, log, section } from "./lib/files.ts";
+import { arg, flag, loadCovenants, loadDeployment, loadRequests, log, section } from "./lib/files.ts";
 import { explorerTx, network, reader, sendTransaction, signerFromEnv } from "./lib/chain.ts";
 import { CLEARINGHOUSE_ABI, STATUS_NAME, USDC_ADDRESS, ERC20_ABI } from "./lib/abi.ts";
 import { formatDelta, formatUsdc } from "./lib/fixtures.ts";
@@ -73,17 +73,40 @@ async function main() {
   const orderId = orderArg ? BigInt(orderArg) : await latestOpenOrder(net, deployment.contract, record.serviceId);
   log(`  order         ${orderId}`);
 
-  // 1. Execute and attest. No order id yet: the attestation is bound after we
-  //    know what happened, so a breach cannot be pre-signed.
-  const probe = await execute({ fixture: slug, mode, serviceId: record.serviceId });
-  printQuote(probe, `measured (${mode})`);
+  // The bytes this order committed to. The verifier will refuse to attest unless
+  // the request it is about to send hashes to the same value, so this is the
+  // request the call is judged on — not one this script made up now.
+  const requests = (() => {
+    try {
+      return loadRequests(key);
+    } catch {
+      return { network: net.label, requests: [] };
+    }
+  })();
+  const committed = requests.requests.find((r) => r.orderId === orderId.toString());
+  if (!committed) {
+    throw new Error(
+      `no recorded request for order ${orderId}. Create the order with scripts/order.ts first — the request has to be committed onchain before it can be attested.`,
+    );
+  }
+  log(`  request       ${committed.body}`);
 
-  // 2. Sign the attestation bound to this order.
+  // 1. Execute and measure, without an order id: nothing is signed yet.
+  const probe = await execute({
+    fixture: slug,
+    mode,
+    serviceId: record.serviceId,
+    bodyRaw: committed.body,
+  });
+  printQuote(probe, `measured (${committed.mode})`);
+
+  // 2. Sign the attestation bound to this order and this request.
   const addressed = await execute({
     fixture: slug,
     mode,
     serviceId: record.serviceId,
     orderId: orderId.toString(),
+    bodyRaw: committed.body,
   });
   if (!addressed.attestation?.signature || !addressed.attestation.calldata) {
     throw new Error(
