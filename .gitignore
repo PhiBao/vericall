@@ -1,3 +1,9 @@
+# Agent and founder guidance. These files steer how this repository is built, and
+# they are deliberately not part of it: the product's documentation is README.md.
+# Kept out of git rather than deleted, so the working copies stay in place.
+AGENTS.md
+FOUNDER.md
+
 # Secrets — never commit. The operator scripts read keys from the environment
 # by name; nothing here should ever hold one.
 .env
