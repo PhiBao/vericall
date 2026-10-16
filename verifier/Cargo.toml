@@ -1,0 +1,32 @@
+[package]
+name = "vericall-verifier"
+version = "0.1.0"
+edition = "2021"
+description = "VeriCall SLA execution + attestation engine: runs real software-to-software calls, measures latency, validates response schemas, and signs EIP-712 SLA attestations for Arc."
+license = "MIT"
+
+[[bin]]
+name = "vericall"
+path = "src/main.rs"
+
+[dependencies]
+axum = { version = "0.7", features = ["json"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "signal", "time", "process"] }
+tower-http = { version = "0.6", features = ["fs", "cors", "trace"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+alloy-primitives = "1"
+alloy-sol-types = "1"
+tiny-keccak = { version = "2", features = ["keccak"] }
+k256 = { version = "0.13", features = ["ecdsa", "std"] }
+sha2 = "0.10"
+hex = "0.4"
+thiserror = "2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+clap = { version = "4", features = ["derive", "env"] }
+anyhow = "1"
+
+[dev-dependencies]
+# none — tests use hand-rolled fixtures and a tiny local HTTP harness

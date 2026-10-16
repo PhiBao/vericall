@@ -1,0 +1,8 @@
+# The image copies only the built binary, the built site and the deployment
+# record. Everything else stays out so the context stays small and no secret or
+# build artefact can leak in by accident.
+**
+!target/release/vericall
+!web/dist
+!deployments
+!Dockerfile

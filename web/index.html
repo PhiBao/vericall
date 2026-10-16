@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="mask-icon" href="/favicon.svg" color="#0052FF" />
+    <!-- The design system is set in Space Grotesk (display), Inter (body) and
+         JetBrains Mono (every number). Loaded with display=swap so a blocked
+         font request degrades to the system stack rather than to invisible
+         text: the tabular figures come from font-variant-numeric, which the
+         fallbacks honour. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;550&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@500;600&display=swap"
+    />
+    <meta name="color-scheme" content="light" />
+    <title>VeriCall — SLA settlement for software that pays software</title>
+    <meta
+      name="description"
+      content="VeriCall holds a USDC payment in escrow until a software call proves it met its latency and schema promise — then splits the settlement across the provider and its upstream dependencies on Arc."
+    />
+    <meta name="theme-color" content="#0D1117" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

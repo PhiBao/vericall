@@ -1,0 +1,12 @@
+{
+  "network": "Arc",
+  "chainId": 5042,
+  "contract": "0xb980fa2a21b09a7304da285187f67daf55600619",
+  "owner": "0x4AB5e7F2b5464B9494b49EFE41C2f00e7bcfE555",
+  "usdc": "0x3600000000000000000000000000000000000000",
+  "deployedAt": "2026-10-16T12:57:14.203Z",
+  "txHash": "0xe251f33dab9eb1b21e526d235233ecb7fa12a59f6453e587ab274609d04fa437",
+  "blockNumber": 26265144,
+  "gasUsed": "2927704",
+  "deployFeeUsdc": "0.058557"
+}

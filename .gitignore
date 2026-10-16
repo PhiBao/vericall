@@ -1,0 +1,29 @@
+# Secrets — never commit. The operator scripts read keys from the environment
+# by name; nothing here should ever hold one.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+keystore/
+
+# Rust
+target/
+
+# Node
+node_modules/
+web/dist/
+.pnpm-store/
+*.tsbuildinfo
+
+# Foundry
+contracts/out/
+contracts/cache/
+contracts/broadcast/
+contracts/lib/
+
+# Local tooling
+.DS_Store
+*.log
+.wrangler/
+.fly/

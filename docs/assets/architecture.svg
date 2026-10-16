@@ -1,0 +1,165 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 720" role="img"
+     aria-labelledby="archTitle archDesc" font-family="Inter, system-ui, sans-serif">
+  <title id="archTitle">VeriCall settlement architecture</title>
+  <desc id="archDesc">A caller escrows USDC in the VeriCall clearinghouse on Arc. The Rust verifier executes the
+    service's registered endpoint, measures the latency, validates the response against the covenant schema and signs
+    an EIP-712 attestation. The contract then pays the provider and its upstream dependency, or rebates the caller, or
+    refunds and slashes the bond.</desc>
+
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#5c636b"/>
+    </marker>
+    <marker id="ag" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#059669"/>
+    </marker>
+    <marker id="aa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#d97706"/>
+    </marker>
+    <marker id="ab" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#0052ff"/>
+    </marker>
+    <pattern id="paper" width="28" height="28" patternUnits="userSpaceOnUse">
+      <rect width="28" height="28" fill="#f7f6f2"/>
+      <path d="M28 0 L0 0 0 28" fill="none" stroke="#111315" stroke-opacity="0.045" stroke-width="1"/>
+    </pattern>
+  </defs>
+
+  <rect width="1180" height="720" fill="url(#paper)"/>
+
+  <!-- ── heading ───────────────────────────────────────────────────────── -->
+  <text x="40" y="46" font-size="20" font-weight="600" fill="#111315" font-family="Space Grotesk, Inter, sans-serif"
+        letter-spacing="-0.4">One escrow, adjudicated by measurement, paid out in one transaction</text>
+  <text x="40" y="70" font-size="12.5" fill="#5c636b">
+    Arc mainnet · chain id 5042 · USDC is both the settlement asset and the gas token · finality on inclusion
+  </text>
+
+  <!-- ── caller ────────────────────────────────────────────────────────── -->
+  <rect x="40" y="130" width="248" height="112" rx="5" fill="#fffefb" stroke="#e2e0d8"/>
+  <text x="60" y="158" font-size="13.5" font-weight="600" fill="#111315">Caller</text>
+  <text x="60" y="177" font-size="11" fill="#5c636b" font-family="JetBrains Mono, monospace">0x4AB5…e555</text>
+  <line x1="60" y1="190" x2="268" y2="190" stroke="#e2e0d8"/>
+  <text x="60" y="210" font-size="11.5" fill="#5c636b">software buying an API call</text>
+  <text x="60" y="228" font-size="11.5" fill="#5c636b">pays the gas, owns the outcome</text>
+
+  <path d="M288 168 L388 168" fill="none" stroke="#0052ff" stroke-width="1.8" marker-end="url(#ab)"/>
+  <text x="292" y="160" font-size="11" fill="#003dc0" font-family="JetBrains Mono, monospace">1 escrow</text>
+  <path d="M388 234 L292 234" fill="none" stroke="#d97706" stroke-width="1.8" marker-end="url(#aa)"/>
+  <text x="292" y="226" font-size="10.5" fill="#d97706" font-family="JetBrains Mono, monospace">5 rebate</text>
+
+  <!-- ── the clearinghouse ─────────────────────────────────────────────── -->
+  <rect x="392" y="106" width="396" height="272" rx="5" fill="#0d1117" stroke="#202832"/>
+  <text x="416" y="136" font-size="14" font-weight="600" fill="#e6edf3" font-family="Space Grotesk, Inter, sans-serif">
+    VeriCallClearinghouse
+  </text>
+  <text x="416" y="155" font-size="10.5" fill="#8b98a6" font-family="JetBrains Mono, monospace">
+    0xb980fa2a21b09a7304da285187f67daf55600619
+  </text>
+  <line x1="416" y1="168" x2="764" y2="168" stroke="#202832"/>
+
+  <text x="416" y="190" font-size="10.5" fill="#667585" letter-spacing="0.6">HOLDS</text>
+  <g font-size="11.5" fill="#e6edf3" font-family="JetBrains Mono, monospace">
+    <text x="416" y="210">escrowed USDC (6 dec)</text>
+    <text x="416" y="228">provider bonds</text>
+    <text x="416" y="246">fallback credits</text>
+  </g>
+
+  <text x="608" y="190" font-size="10.5" fill="#667585" letter-spacing="0.6">COMPUTES</text>
+  <g font-size="11.5" fill="#e6edf3" font-family="JetBrains Mono, monospace">
+    <text x="608" y="210">latency rebate</text>
+    <text x="608" y="228">basis-point splits</text>
+    <text x="608" y="246">bond penalty</text>
+  </g>
+
+  <line x1="416" y1="264" x2="764" y2="264" stroke="#202832"/>
+  <text x="416" y="286" font-size="10.5" fill="#667585" letter-spacing="0.6">REFUSES TO SETTLE WITHOUT</text>
+  <g font-size="11.5" fill="#7ee0a8" font-family="JetBrains Mono, monospace">
+    <text x="416" y="306">an EIP-712 attestation</text>
+    <text x="416" y="324">the covenant's schema</text>
+    <text x="416" y="342">a bond ≥ one order's penalty</text>
+  </g>
+  <text x="416" y="366" font-size="10.5" fill="#8b98a6">
+    and it never reverts every payout because one recipient is restricted
+  </text>
+
+  <!-- ── provider and dependency ───────────────────────────────────────── -->
+  <rect x="888" y="130" width="252" height="106" rx="5" fill="#edf9f3" stroke="#059669"/>
+  <text x="906" y="158" font-size="13" font-weight="600" fill="#111315">Provider</text>
+  <text x="906" y="176" font-size="11" fill="#5c636b" font-family="JetBrains Mono, monospace">0x15AB…ac4b</text>
+  <text x="906" y="198" font-size="11.5" fill="#5c636b">published the covenant,</text>
+  <text x="906" y="215" font-size="11.5" fill="#5c636b">staked the bond, earns the split</text>
+
+  <rect x="888" y="272" width="252" height="106" rx="5" fill="#edf9f3" stroke="#059669"/>
+  <text x="906" y="300" font-size="13" font-weight="600" fill="#111315">Upstream dependency</text>
+  <text x="906" y="318" font-size="11" fill="#5c636b" font-family="JetBrains Mono, monospace">0x0382…1e67</text>
+  <text x="906" y="340" font-size="11.5" fill="#5c636b">the data source behind the service,</text>
+  <text x="906" y="357" font-size="11.5" fill="#5c636b">paid per successful call</text>
+
+  <path d="M788 190 L884 176" fill="none" stroke="#059669" stroke-width="1.8" marker-end="url(#ag)"/>
+  <path d="M788 262 L884 316" fill="none" stroke="#059669" stroke-width="1.8" marker-end="url(#ag)"/>
+  <text x="792" y="150" font-size="11" fill="#059669" font-family="JetBrains Mono, monospace">4 split by bps</text>
+
+  <!-- ── verifier ──────────────────────────────────────────────────────── -->
+  <rect x="392" y="424" width="396" height="128" rx="5" fill="#fffefb" stroke="#e2e0d8"/>
+  <text x="416" y="452" font-size="13" font-weight="600" fill="#111315">Rust verifier</text>
+  <text x="516" y="452" font-size="10.5" fill="#8b98a6" font-family="JetBrains Mono, monospace">· vericall.fly.dev</text>
+  <line x1="416" y1="462" x2="764" y2="462" stroke="#e2e0d8"/>
+  <text x="416" y="482" font-size="11.5" fill="#5c636b">executes the registered endpoint, measures it on a monotonic clock,</text>
+  <text x="416" y="499" font-size="11.5" fill="#5c636b">validates the response against the covenant's JSON schema,</text>
+  <text x="416" y="516" font-size="11.5" fill="#5c636b">quotes the settlement, then signs what it actually observed.</text>
+  <text x="416" y="538" font-size="11" fill="#003dc0" font-family="JetBrains Mono, monospace">
+    its key can attest; it cannot move funds
+  </text>
+
+  <path d="M470 424 L470 382" fill="none" stroke="#5c636b" stroke-width="1.6" marker-end="url(#a)"/>
+  <text x="352" y="407" font-size="10.5" fill="#5c636b" font-family="JetBrains Mono, monospace">2 read terms</text>
+
+  <path d="M624 382 L624 424" fill="none" stroke="#5c636b" stroke-width="1.6" marker-end="url(#a)"/>
+  <text x="634" y="407" font-size="10.5" fill="#5c636b" font-family="JetBrains Mono, monospace">3 attest to the settlement</text>
+
+  <!-- service endpoint that is actually dialled -->
+  <rect x="40" y="440" width="248" height="96" rx="5" fill="#fffefb" stroke="#e2e0d8" stroke-dasharray="4 3"/>
+  <text x="60" y="466" font-size="12" font-weight="600" fill="#111315">The published endpoint</text>
+  <text x="60" y="486" font-size="10.5" fill="#5c636b" font-family="JetBrains Mono, monospace">/mock/risk-scorer</text>
+  <text x="60" y="506" font-size="11" fill="#5c636b">a real HTTP call to the URI the</text>
+  <text x="60" y="522" font-size="11" fill="#5c636b">covenant names — and no other</text>
+  <path d="M288 488 L388 488" fill="none" stroke="#5c636b" stroke-width="1.6" marker-end="url(#a)"/>
+  <text x="296" y="480" font-size="10.5" fill="#5c636b" font-family="JetBrains Mono, monospace">HTTP</text>
+
+  <!-- ── what each verdict pays ────────────────────────────────────────── -->
+  <line x1="40" y1="578" x2="1140" y2="578" stroke="#e2e0d8"/>
+  <text x="40" y="602" font-size="11" font-weight="600" fill="#5c636b" letter-spacing="0.6">WHAT THE CONTRACT PAYS</text>
+
+  <rect x="40" y="614" width="352" height="92" rx="4" fill="#edf9f3" stroke="#059669"/>
+  <circle cx="62" cy="636" r="4.5" fill="#059669"/>
+  <text x="78" y="641" font-size="12" font-weight="600" fill="#111315">Pass — inside the grace SLA</text>
+  <text x="62" y="662" font-size="11" fill="#5c636b">Full price, split by basis points in one transaction:</text>
+  <text x="62" y="682" font-size="11" fill="#111315" font-family="JetBrains Mono, monospace">
+    0.16 provider · 0.04 dependency
+  </text>
+  <text x="62" y="698" font-size="10" fill="#8b929a" font-family="JetBrains Mono, monospace">
+    order #1 · 126 ms · 0x8a2e8f07…
+  </text>
+
+  <rect x="412" y="614" width="356" height="92" rx="4" fill="#fdf4e7" stroke="#d97706"/>
+  <circle cx="434" cy="636" r="4.5" fill="#d97706"/>
+  <text x="450" y="641" font-size="12" font-weight="600" fill="#111315">Degraded — past grace, inside the timeout</text>
+  <text x="434" y="662" font-size="11" fill="#5c636b">A rebate linear in the overrun returns to the caller;</text>
+  <text x="434" y="682" font-size="11" fill="#111315" font-family="JetBrains Mono, monospace">
+    0.035097 rebated · 0.16 split
+  </text>
+  <text x="434" y="698" font-size="10" fill="#8b929a" font-family="JetBrains Mono, monospace">
+    order #2 · 1250 ms · 0x83f9b9f5…
+  </text>
+
+  <rect x="788" y="614" width="352" height="92" rx="4" fill="#fdeeee" stroke="#dc2626"/>
+  <circle cx="810" cy="636" r="4.5" fill="#dc2626"/>
+  <text x="826" y="641" font-size="12" font-weight="600" fill="#111315">Breach — over the timeout, or wrong shape</text>
+  <text x="810" y="662" font-size="11" fill="#5c636b">The caller is refunded the escrow and a penalty is</text>
+  <text x="810" y="682" font-size="11" fill="#111315" font-family="JetBrains Mono, monospace">
+    0.2 refund + 0.04 slash → caller
+  </text>
+  <text x="810" y="698" font-size="10" fill="#8b929a" font-family="JetBrains Mono, monospace">
+    order #3 · 2251 ms · 0x11d372cf…
+  </text>
+</svg>

@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="VeriCall">
+  <title>VeriCall</title>
+  <!--
+    Mark: one payment line entering a verification gate, that gate splitting it
+    into an upward provider stream and an upward dependency stream, with a
+    return arc back to the payer on a breach. Deliberately geometric: it has to
+    survive 16px in browser chrome.
+  -->
+  <rect width="64" height="64" rx="12" fill="#0D1117"/>
+  <!-- incoming payment -->
+  <path d="M6 32h13" stroke="#E6EDF3" stroke-width="4" stroke-linecap="round"/>
+  <!-- verification gate -->
+  <path d="M19 32l9-13 9 13-9 13z" fill="none" stroke="#0052FF" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M24.5 32.5l3 3 5.5-6.5" fill="none" stroke="#0052FF" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- split streams -->
+  <path d="M37 32h6l8-14" stroke="#059669" stroke-width="4" stroke-linecap="round"/>
+  <path d="M37 32h6l8 14" stroke="#059669" stroke-width="4" stroke-linecap="round"/>
+  <!-- breach return -->
+  <path d="M45 50c8 0 12-8 12-8" stroke="#D97706" stroke-width="3.4" stroke-linecap="round" stroke-dasharray="5 4"/>
+  <circle cx="51" cy="18" r="3.4" fill="#059669"/>
+  <circle cx="51" cy="46" r="3.4" fill="#059669"/>
+</svg>

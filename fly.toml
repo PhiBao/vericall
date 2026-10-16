@@ -1,0 +1,34 @@
+# VeriCall: the live app and the SLA verifier, one process, one origin.
+#
+# The same process serves the built frontend and answers /api, so the page and
+# the proof it shows come from one place — no CORS, no second deployment, and no
+# way for the UI to drift from the verifier it is talking to.
+app = "vericall"
+primary_region = "sin"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  VERICALL_NETWORK = "mainnet"
+  VERICALL_PORT = "8080"
+  VERICALL_STATIC_DIR = "/app/web/dist"
+  VERICALL_COVENANTS = "/app/deployments/covenants-arc-mainnet.json"
+  VERICALL_PUBLIC_BASE_URL = "https://vericall.fly.dev"
+  VERICALL_WATCH_ADDRESSES = "0x4AB5e7F2b5464B9494b49EFE41C2f00e7bcfE555,0x15AB8109378736FA1C1C401175d375DB9b1dAC4B,0x0382bca3Fc934169a43c7ebe1Ee4B4d6A69C1e67"
+  VERICALL_CONTRACT = "0xb980fa2a21b09a7304da285187f67daf55600619"
+  VERICALL_MOCK_SERVICES = "1"
+  RUST_LOG = "vericall=info,tower_http=warn"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "suspend"
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
+  cpus = 1

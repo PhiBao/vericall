@@ -1,0 +1,12 @@
+{
+  "network": "Arc Testnet",
+  "chainId": 5042002,
+  "contract": "0xb980fa2a21b09a7304da285187f67daf55600619",
+  "owner": "0x4AB5e7F2b5464B9494b49EFE41C2f00e7bcfE555",
+  "usdc": "0x3600000000000000000000000000000000000000",
+  "deployedAt": "2026-10-16T12:39:30.787Z",
+  "txHash": "0xe7cbd39d28a672047bf82663ec1ee2586b0010d1021fb1602001002174fba04e",
+  "blockNumber": 67500339,
+  "gasUsed": "2927704",
+  "deployFeeUsdc": "0.058554"
+}
