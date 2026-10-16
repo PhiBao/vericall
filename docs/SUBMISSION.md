@@ -24,6 +24,22 @@ the promise is missed.**
 | **Deploy transaction** | [`0xe251f33d…`](https://explorer.arc.io/tx/0xe251f33dab9eb1b21e526d235233ecb7fa12a59f6453e587ab274609d04fa437) |
 | **Contract (Arc testnet)** | same address, [`0xb980fa2a…`](https://explorer.testnet.arc.io/address/0xb980fa2a21b09a7304da285187f67daf55600619) — the two chains share a deployer and a nonce |
 
+## Two of the services are a real model call
+
+`intent-router` and `payment-guard` are served by a live **TypeSafe Jev** request,
+not by fixed logic. One batched question set each: a Choice over a closed set of
+intents, five hazard Nouls, presence Nouls, and Score questions for urgency and
+severity. The response is typed probabilities, which is what makes a covenant over
+it meaningful — the schema requires `confidence` and a probability per option, and
+a model returning prose could not satisfy it. The verdict the guard returns is
+computed in code from published thresholds, so policy stays visible and changeable
+without another inference.
+
+Because every call spends real credits on a public endpoint, the client is bounded
+to two concurrent calls, twelve a minute and three hundred a day, and `/api/health`
+reports what is left. A refused call is a *failed* call: the verifier measures the
+refusal and the covenant refunds the caller out of the provider's stake.
+
 ## Example mainnet transactions, one per verdict
 
 | Verdict | What moved | Transaction |
@@ -32,9 +48,18 @@ the promise is missed.**
 | **Degraded** — 1250 ms measured | 0.035097 rebated to the caller, 0.128 to the provider, 0.032 to the dependency | [`0x83f9b9f5…`](https://explorer.arc.io/tx/0x83f9b9f51c03316415b99533a4967940471d13cdc98db177406712eba647028f) |
 | **Breach** — 2251 ms, schema violated | 0.2 escrow refunded plus 0.04 slashed from the provider's bond | [`0x11d372cf…`](https://explorer.arc.io/tx/0x11d372cfc5db58a1d3af74f9f960ba80a43b7e9462434329c49708ae9cf7bb31) |
 | **Pass, attested by the live deployment** | 0.16 + 0.04, signed by the service at vericall.fly.dev | [`0xf648f251…`](https://explorer.arc.io/tx/0xf648f251650a7315d8c6f6a87126ceebbc0e3dbd03d0171eb548be816778ef7f) |
+| **Pass on a model call** (`intent-router`, Jev) | 0.04 to the provider, 0.01 to its dependency, 251 ms | [`0x6370fb2f…`](https://explorer.arc.io/tx/0x6370fb2f945fcda6cd6a36770bcc9c449d3d6ba8564ec2b51ba8936190cc4fa1) |
+| **Breach from a real model outage** (`payment-guard`, Jev) | the service hit its own rate limit and refused; 0.096697 refunded to the caller, 0.02 slashed from the stake | [`0x586230ca…`](https://explorer.arc.io/tx/0x586230cac965d342ff09679ab5e1873098c133b231911ae82a0616e59d434c48) |
 
-Seven mainnet settlements in total, across three wallets and two covenants with different prices,
-rates and splits. `README.md` lists all seven with the exact amounts.
+Nine mainnet settlements in total, across three wallets and five covenants — two
+deterministic services and two model-backed ones — with different prices, rates and
+splits. `README.md` lists all nine with the exact amounts.
+
+The outage settlement is worth reading closely: `scripts/demo-outage.ts` spends the
+service's own per-minute model budget until it starts refusing calls, then settles
+an order while it is refusing. The refusal is the service's, not an injected
+failure, and the arithmetic that follows is the contract's. A model outage is priced
+the same way a slow endpoint is.
 
 ## How Arc Studio was used
 
@@ -58,10 +83,11 @@ response bytes actually received); the EIP-712 signatures (recovered onchain by 
 chain reads in the app (raced across three independent RPC endpoints, with the answering endpoint
 shown); and the transaction hashes in the ledger (scanned from the contract's own events).
 
-**Not real, and labelled as such in the UI and the README:** the three published services are
-deterministic HTTP endpoints hosted by the verifier so the path can be demonstrated without
-depending on a third party's API and network. They are real endpoints over real HTTP with real,
-deliberately injected latency. No external customer has used VeriCall; the three wallets are ours.
+**Not real, and labelled as such in the UI and the README:** three of the five published services
+are deterministic HTTP endpoints hosted by the verifier, so the settlement arithmetic can be
+exercised without depending on a third party's API and network. They are real endpoints over real
+HTTP with real, deliberately injected latency. The other two are real model calls. No external
+customer has used VeriCall; the three wallets are ours.
 
 ## What a reviewer should try first
 
@@ -73,12 +99,15 @@ deliberately injected latency. No external customer has used VeriCall; the three
    step — request hash, measured latency, schema result, the exact quote, and the `settleOrder`
    payload it would sign. Nothing is simulated; the call really happens.
 3. Drag the **payoff curve** slider to see what any latency would cost.
-4. Run the independent check:
+4. Run the independent checks:
    ```
-   node web/scripts/verify.ts --network arc-mainnet     # 23 checks, no key, no spending
+   node web/scripts/verify.ts --network arc-mainnet     # 31 checks, no key, no spending
+   cd web && pnpm test:wallet                           # 11 checks against a stubbed wallet
    ```
 5. Read the contract's rules in `contracts/src/VeriCallClearinghouse.sol` and the arithmetic that
    prices a millisecond in `verifier/src/sla.rs`, which is asserted equal to the Solidity in tests.
+6. Connect a wallet: it lands on Arc in one action, and Disconnect clears the session and asks the
+   wallet to drop the page's account permission where its API allows that.
 
 ## Tracks
 

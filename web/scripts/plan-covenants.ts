@@ -16,6 +16,7 @@
 import {
   arg,
   loadDeployment,
+  loadCovenants,
   log,
   section,
   upsertCovenant,
@@ -24,7 +25,7 @@ import {
   type CovenantFile,
   type CovenantRecord,
 } from "./lib/files.ts";
-import { FIXTURES, fixture, parseBondOverrides, schemaHash } from "./lib/fixtures.ts";
+import { fixture, fixtures, parseBondOverrides, schemaHash } from "./lib/fixtures.ts";
 
 async function main() {
   const key = (arg("network", "arc-mainnet") ?? "arc-mainnet") as "arc-mainnet" | "arc-testnet";
@@ -41,6 +42,18 @@ async function main() {
   // re-plan target the next free id instead of guessing.
   const startId = Number(arg("start-id", "1"));
 
+  // Which services this run plans. Without a filter every fixture is planned,
+  // which is right for a fresh deployment and wrong for adding one later: it
+  // would renumber services that are already registered and onchain.
+  const only = arg("services")
+    ?.split(",")
+    .map((slug) => slug.trim())
+    .filter(Boolean);
+  const toPlan = only ? fixtures().filter((f) => only.includes(f.slug)) : fixtures();
+  if (toPlan.length === 0) {
+    throw new Error(`--services named nothing that exists; known: ${fixtures().map((f) => f.slug).join(", ")}`);
+  }
+
   // Stake sizes, for a deployment whose wallet cannot fund the per-service
   // defaults. Sizing a stake to what the provider can actually lose is a feature
   // of the demo, not a shortcut: every bond still has to cover one order's
@@ -56,15 +69,26 @@ async function main() {
   log(`  start id    ${startId}`);
 
   const base = process.env.VERICALL_PUBLIC_BASE_URL ?? "http://localhost:8787";
-  let file: CovenantFile = {
-    network: deployment.network,
-    chainId: deployment.chainId,
-    contract: deployment.contract,
-    deployBlock: deployment.blockNumber,
-    covenants: [],
-  };
 
-  FIXTURES.forEach((slug, index) => {
+  // Merge into the existing record rather than replacing it. Replacing is how a
+  // record loses the transaction hashes of covenants it is not re-planning, and
+  // a record that disagrees with the chain is refused by the verifier.
+  let file: CovenantFile = (() => {
+    try {
+      const existing = loadCovenants(key, deployment.contract);
+      return { ...existing, deployBlock: deployment.blockNumber };
+    } catch {
+      return {
+        network: deployment.network,
+        chainId: deployment.chainId,
+        contract: deployment.contract,
+        deployBlock: deployment.blockNumber,
+        covenants: [],
+      };
+    }
+  })();
+
+  toPlan.forEach((slug, index) => {
     const terms = fixture(slug.slug);
     const record: CovenantRecord = {
       slug: slug.slug,

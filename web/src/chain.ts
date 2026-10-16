@@ -282,6 +282,13 @@ export interface WalletController {
   error: string | null;
   chain: Chain;
   connect: () => Promise<void>;
+  /**
+   * Forget this session. There is no standard "disconnect" in EIP-1193 — a page
+   * cannot un-authorise itself — so this clears the local session and, where the
+   * wallet supports it, revokes the account permission the page was granted. The
+   * button says the same thing rather than implying more than it can do.
+   */
+  disconnect: () => Promise<void>;
   switchToChain: () => Promise<void>;
   sendSettlement: (to: Address, data: Hash) => Promise<Hash>;
   waitForSettlement: (hash: Hash) => Promise<ArcReceipt | null>;
@@ -378,11 +385,50 @@ export function useWallet(chain: Chain): WalletController {
       if (!first) throw new Error("the wallet returned no account");
       setAddress(first);
       setStatus("connected");
-      setChainId(parseChainId(await injected.request({ method: "eth_chainId" })));
+
+      // Connect and land on the settlement chain in one action. A caller who has
+      // to be told to change networks after connecting is a caller who is about
+      // to sign something on the wrong one; `requestChainSwitch` adds the chain
+      // first if the wallet has never seen it.
+      let walletChainId = parseChainId(await injected.request({ method: "eth_chainId" }));
+      if (walletChainId !== chain.id) {
+        try {
+          await requestChainSwitch(injected, chain);
+          walletChainId = parseChainId(await injected.request({ method: "eth_chainId" }));
+        } catch (cause) {
+          // A refused switch is not a failed connection: stay connected, keep the
+          // reason, and let the masthead offer the switch again.
+          setError(walletErrorMessage(cause));
+        }
+      }
+      setChainId(walletChainId);
     } catch (cause) {
       setStatus("disconnected");
       setError(walletErrorMessage(cause));
     }
+  }, [provider, chain]);
+
+  const disconnect = useCallback(async (): Promise<void> => {
+    const injected = provider;
+    setError(null);
+    // Revoking is best-effort: MetaMask and some others support
+    // `wallet_revokePermissions`, others do not, and a wallet that does not know
+    // the method returns an error rather than honouring it. Either way the page
+    // stops treating this session as connected, which is what the button
+    // promises a reader.
+    if (injected) {
+      try {
+        await injected.request({
+          method: "wallet_revokePermissions",
+          params: [{ eth_accounts: {} }],
+        });
+      } catch {
+        // Not supported, or the user declined. The local session still clears.
+      }
+    }
+    setAddress(null);
+    setChainId(null);
+    setStatus(injected ? "disconnected" : "unavailable");
   }, [provider]);
 
   const switchToChain = useCallback(async (): Promise<void> => {
@@ -449,6 +495,7 @@ export function useWallet(chain: Chain): WalletController {
       error,
       chain,
       connect,
+      disconnect,
       switchToChain,
       sendSettlement,
       waitForSettlement,
@@ -462,6 +509,7 @@ export function useWallet(chain: Chain): WalletController {
       error,
       chain,
       connect,
+      disconnect,
       switchToChain,
       sendSettlement,
       waitForSettlement,

@@ -63,6 +63,44 @@
       "registeredAt": "2026-10-16T13:00:00Z",
       "registeredAtBlock": 26265873,
       "txHash": "0x096db2aa13f801afe959b8f094e491636468c3dc81e1c8a50eea04e3267d68ec"
+    },
+    {
+      "slug": "intent-router",
+      "serviceId": 7,
+      "provider": "0x15AB8109378736FA1C1C401175d375DB9b1dAC4B",
+      "verifier": "0x0382bca3Fc934169a43c7ebe1Ee4B4d6A69C1e67",
+      "dependency": "0x0382bca3Fc934169a43c7ebe1Ee4B4d6A69C1e67",
+      "name": "Payment Intent Router",
+      "endpointUri": "https://vericall.fly.dev/mock/intent-router",
+      "schemaHash": "0x75331381514230051247aa0a6443f9025a8b2852e3a83bfe2985b2b533ba278d",
+      "callPriceUsdc": "0.05",
+      "graceLatencyMs": 2500,
+      "hardTimeoutMs": 10000,
+      "maxRebateBps": 4000,
+      "slashPenaltyBps": 2000,
+      "providerBps": 8000,
+      "initialBondUsdc": "0.02",
+      "registeredAt": "2026-10-16T14:03:46.637Z",
+      "txHash": "0xbbeeb3efb5318704b6903890e2ca61be7281e4ee25a07cd3551c233d410ad055"
+    },
+    {
+      "slug": "payment-guard",
+      "serviceId": 8,
+      "provider": "0x15AB8109378736FA1C1C401175d375DB9b1dAC4B",
+      "verifier": "0x0382bca3Fc934169a43c7ebe1Ee4B4d6A69C1e67",
+      "dependency": "0x0382bca3Fc934169a43c7ebe1Ee4B4d6A69C1e67",
+      "name": "Payment Policy Guard",
+      "endpointUri": "https://vericall.fly.dev/mock/payment-guard",
+      "schemaHash": "0x6fd2b3f7ad29e0f9681926041c8bc4aa2c1e59afd541e8a5bf75936bec198352",
+      "callPriceUsdc": "0.08",
+      "graceLatencyMs": 3000,
+      "hardTimeoutMs": 12000,
+      "maxRebateBps": 5000,
+      "slashPenaltyBps": 2500,
+      "providerBps": 7500,
+      "initialBondUsdc": "0.03",
+      "registeredAt": "2026-10-16T14:03:47.827Z",
+      "txHash": "0x402705cc284378c03aa066a5f6a5e1c9f80a21f5449aabf3dcc99dc6553b8e79"
     }
   ]
 }

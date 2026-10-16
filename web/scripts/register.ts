@@ -25,7 +25,7 @@ import {
   type CovenantFile,
   type CovenantRecord,
 } from "./lib/files.ts";
-import { FIXTURES, fixture, formatUsdc, parseBondOverrides, parseUsdc, schemaHash } from "./lib/fixtures.ts";
+import { fixture, fixtures, formatUsdc, parseBondOverrides, parseUsdc, schemaHash } from "./lib/fixtures.ts";
 import { explorerTx, network, reader, sendTransaction, signerFromEnv } from "./lib/chain.ts";
 import { CLEARINGHOUSE_ABI, USDC_ADDRESS, ERC20_ABI } from "./lib/abi.ts";
 import { encodeFunctionData } from "viem";
@@ -68,7 +68,7 @@ async function main() {
   }
 
   const client = reader(net);
-  const slugs = arg("service") ? [arg("service")!] : FIXTURES.map((f) => f.slug);
+  const slugs = arg("service") ? [arg("service")!] : fixtures().map((f) => f.slug);
   const bondOverride = arg("bond");
   const perService = parseBondOverrides(arg("bonds"));
   const bondFor = (slug: string, fallback: string): string => perService[slug] ?? bondOverride ?? fallback;

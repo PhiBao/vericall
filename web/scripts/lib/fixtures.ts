@@ -1,154 +1,92 @@
 /**
- * The three covenants the demo publishes, with their real SLA terms.
+ * The published services, read from `fixtures/services.json`.
  *
- * One definition, consumed by both the operator scripts and the Rust verifier,
- * so the terms a service is registered with are the same terms the verifier
- * prices against. A JSON schema that a judge can read is the whole point of the
- * product, so each one is written out rather than generated.
+ * One source of truth for both languages. The Rust verifier embeds that file and
+ * the tooling here reads it, so the terms a covenant is registered with are the
+ * terms the verifier prices against — and the schema the verifier validates
+ * against is the schema that was committed onchain. Writing them out twice is how
+ * a covenant ends up priced against different numbers than it was registered
+ * with, and the schema is the part that must not drift.
  *
- * The latencies are chosen so the built-in services can exercise all three
- * settlement paths on demand:
- *   risk-scorer     pass 125 ms · degraded 1250 ms · breach 2250 ms
- *   invoice-parser  pass 100 ms · degraded  950 ms · breach 1750 ms
- *   ast-auditor     pass 250 ms · degraded 2000 ms · breach 3250 ms
+ * The schema is kept as a parsed value rather than a string: the commitment is
+ * taken over the canonical serialisation of the parsed value, so both languages
+ * hash the same bytes by construction and a reformatted schema is still the same
+ * schema.
  */
 
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { keccak256, toHex } from "viem";
+import { repoRoot } from "./files.ts";
 
 export interface CovenantFixture {
   slug: string;
   name: string;
   summary: string;
+  /** The service's path, relative to the verifier's public base URL. */
   path: string;
-  /** The JSON a passing response must satisfy, verbatim. */
-  schema: string;
+  /** `deterministic` or `jev` — what actually produces the response. */
+  backedBy: string;
+  /** One sentence on what is behind the endpoint. */
+  backing: string;
+  /** The JSON Schema a passing response must satisfy. */
+  schema: unknown;
   priceUsdc: string;
   graceLatencyMs: number;
   hardTimeoutMs: number;
   maxRebateBps: number;
   slashPenaltyBps: number;
-  /** The provider's share; the remaining bps go to the upstream dependency. */
+  /** The provider's share; the remainder goes to the upstream dependency. */
   providerBps: number;
   initialBondUsdc: string;
 }
 
-export const FIXTURES: CovenantFixture[] = [
-  {
-    slug: "risk-scorer",
-    name: "Counterparty Risk Scorer",
-    summary: "Scores a counterparty from sanctions and adverse-media signals before a payment is released.",
-    path: "/mock/risk-scorer",
-    schema: `{
-  "type": "object",
-  "required": ["score", "band", "checks", "asOf"],
-  "properties": {
-    "score": { "type": "number", "minimum": 0, "maximum": 100 },
-    "band": { "type": "string", "enum": ["low", "medium", "high"] },
-    "checks": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
-    "asOf": { "type": "integer", "minimum": 1 }
-  },
-  "additionalProperties": false
-}`,
-    priceUsdc: "0.2",
-    graceLatencyMs: 500,
-    hardTimeoutMs: 2000,
-    maxRebateBps: 4000,
-    slashPenaltyBps: 2000,
-    providerBps: 8000,
-    initialBondUsdc: "0.1",
-  },
-  {
-    slug: "invoice-parser",
-    name: "Invoice Field Extractor",
-    summary: "Turns a PDF or email invoice into typed fields a payment run can act on.",
-    path: "/mock/invoice-parser",
-    schema: `{
-  "type": "object",
-  "required": ["invoiceId", "currency", "amount", "lines"],
-  "properties": {
-    "invoiceId": { "type": "string", "pattern": "^INV-[0-9]{4,}$" },
-    "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
-    "amount": { "type": "integer", "minimum": 1 },
-    "lines": {
-      "type": "array",
-      "minItems": 1,
-      "items": {
-        "type": "object",
-        "required": ["sku", "amount"],
-        "properties": {
-          "sku": { "type": "string", "minLength": 3 },
-          "amount": { "type": "integer", "minimum": 1 }
-        }
-      }
-    }
-  },
-  "additionalProperties": false
-}`,
-    priceUsdc: "0.15",
-    graceLatencyMs: 400,
-    hardTimeoutMs: 1500,
-    maxRebateBps: 5000,
-    slashPenaltyBps: 2500,
-    providerBps: 7000,
-    initialBondUsdc: "0.1",
-  },
-  {
-    slug: "ast-auditor",
-    name: "Contract Surface Auditor",
-    summary: "Reports the external surface and risky patterns of a Solidity source file.",
-    path: "/mock/ast-auditor",
-    schema: `{
-  "type": "object",
-  "required": ["contractName", "highRisk", "findings"],
-  "properties": {
-    "contractName": { "type": "string", "minLength": 1 },
-    "highRisk": { "type": "integer", "minimum": 0 },
-    "findings": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "required": ["rule", "severity"],
-        "properties": {
-          "rule": { "type": "string" },
-          "severity": { "type": "string", "enum": ["info", "low", "medium", "high", "critical"] }
-        }
-      }
-    }
-  },
-  "additionalProperties": false
-}`,
-    priceUsdc: "0.5",
-    graceLatencyMs: 1000,
-    hardTimeoutMs: 3000,
-    maxRebateBps: 3000,
-    slashPenaltyBps: 1500,
-    providerBps: 9000,
-    initialBondUsdc: "0.2",
-  },
-];
+interface FixtureFile {
+  services: CovenantFixture[];
+}
+
+let cached: CovenantFixture[] | null = null;
+
+export function fixtures(): CovenantFixture[] {
+  if (cached) return cached;
+  const path = join(repoRoot, "fixtures", "services.json");
+  const parsed = JSON.parse(readFileSync(path, "utf8")) as FixtureFile;
+  if (!Array.isArray(parsed.services) || parsed.services.length === 0) {
+    throw new Error(`${path} defines no services`);
+  }
+  cached = parsed.services;
+  return cached;
+}
 
 export function fixture(slug: string): CovenantFixture {
-  const found = FIXTURES.find((f) => f.slug === slug);
+  const found = fixtures().find((f) => f.slug === slug);
   if (!found) {
-    throw new Error(`unknown service \`${slug}\`; known: ${FIXTURES.map((f) => f.slug).join(", ")}`);
+    throw new Error(`unknown service \`${slug}\`; known: ${fixtures().map((f) => f.slug).join(", ")}`);
   }
   return found;
+}
+
+/** Shown in the UI and the README: what is actually behind each endpoint. */
+export function isModelBacked(f: CovenantFixture): boolean {
+  return f.backedBy === "jev";
 }
 
 /**
  * The schema commitment a covenant stores onchain.
  *
- * The hash is taken over a *canonical* serialisation — the parsed value with
- * object keys sorted and no insignificant whitespace — rather than the literal
- * text. That way a covenant can be reformatted without changing its commitment,
- * while any real change to the terms produces a different hash. The Rust
- * verifier implements the identical canonicalisation
- * (`verifier/src/main.rs::canonical_json`), and both sides hash the schema they
- * will actually validate against.
+ * Taken over the canonical serialisation — object keys sorted, no insignificant
+ * whitespace — rather than the literal text, so a reformatted schema is the same
+ * agreement while any change to the constraints is a different hash. The Rust
+ * verifier implements the identical canonicalisation and refuses to attest if the
+ * two disagree.
  */
-export function schemaHash(schemaText: string): `0x${string}` {
-  const parsed: unknown = JSON.parse(schemaText);
-  return keccak256(toHex(canonicalJson(parsed)));
+export function schemaHash(schema: unknown): `0x${string}` {
+  return keccak256(toHex(canonicalJson(schema)));
+}
+
+/** The exact bytes the commitment is taken over, for display. */
+export function schemaCanonicalText(schema: unknown): string {
+  return canonicalJson(schema);
 }
 
 function canonicalJson(value: unknown): string {
@@ -159,7 +97,6 @@ function canonicalJson(value: unknown): string {
   );
   return `{${entries.map(([key, item]) => `${JSON.stringify(key)}:${canonicalJson(item)}`).join(",")}}`;
 }
-
 
 /** Parse `--bonds "slug=amount,slug=amount"` into a lookup. */
 export function parseBondOverrides(spec: string | undefined): Record<string, string> {

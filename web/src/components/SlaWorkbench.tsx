@@ -381,7 +381,19 @@ export function SlaWorkbench({ config, configError, ledger, wallet, onSettled }:
                     onChange={() => setSlug(candidate.slug)}
                   />
                   <span>
-                    <span className="picker__title">{candidate.name}</span>
+                    <span className="picker__title">
+                      {candidate.name}
+                      {/*
+                        What produces the response changes what a latency
+                        promise means, so it is stated rather than implied.
+                      */}
+                      <span
+                        className={`tag tag--inline ${candidate.backed_by === "jev" ? "tag--verified" : "tag--muted"}`}
+                        title={candidate.backing}
+                      >
+                        {candidate.backed_by === "jev" ? "model-backed" : "deterministic"}
+                      </span>
+                    </span>
                     <span className="picker__note">{candidate.summary}</span>
                     <span className="picker__facts">
                       <span>{candidate.price_usdc} USDC per call</span>

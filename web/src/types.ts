@@ -39,6 +39,10 @@ export interface ServiceView {
   provider_bond_usdc: string;
   provider_bond_units: string;
   active: boolean;
+  /** `deterministic`, `jev`, or `unknown` when the verifier does not publish it. */
+  backed_by: string;
+  /** One sentence on what is behind the endpoint, when known. */
+  backing?: string | null;
   splits: Split[];
   required_bond_usdc: string;
   bond_covers_one_order: boolean;
@@ -117,6 +121,10 @@ export interface FixturePublic {
   slug: string;
   name: string;
   summary: string;
+  /** `deterministic` or `jev` — what actually produces the response. */
+  backed_by: string;
+  /** One sentence on what is behind the endpoint. */
+  backing: string;
   price_usdc: string;
   grace_latency_ms: number;
   hard_timeout_ms: number;
@@ -147,6 +155,14 @@ export interface PublicConfig {
   eip712: Eip712Public;
 }
 
+export interface ModelServiceFacts {
+  configured: boolean;
+  daily_budget: number;
+  daily_remaining: number;
+  max_concurrent: number;
+  per_minute: number;
+}
+
 export interface Health {
   ok: boolean;
   version: string;
@@ -159,6 +175,8 @@ export interface Health {
   chain: ChainStatus | null;
   chain_error: string | null;
   mock_services: boolean;
+  /** What bounds the model-backed services, and whether they can run at all. */
+  model_services?: ModelServiceFacts;
   uptime_s: number;
 }
 

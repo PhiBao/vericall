@@ -72,6 +72,12 @@ pub struct ServiceView {
     pub provider_bond_usdc: String,
     pub provider_bond_units: String,
     pub active: bool,
+    /// `deterministic` or `jev`. Read from the verifier's own fixture list by
+    /// matching the covenant's registered endpoint, so a reader can see at a
+    /// glance which covenants put a model call under their latency promise.
+    pub backed_by: String,
+    /// One sentence on what is behind the endpoint, when it is known.
+    pub backing: Option<String>,
     pub splits: Vec<SplitView>,
     pub required_bond_usdc: String,
     /// Bond covers one open order at the current price.
@@ -428,6 +434,11 @@ pub async fn read_service(eth: &HttpEth, contract: &str, id: u64) -> Result<Serv
         })
         .collect();
 
+    // Which published service this covenant points at, if the verifier knows it.
+    let published = crate::config::fixtures()
+        .iter()
+        .find(|f| service.endpoint_uri.ends_with(&f.path));
+
     Ok(ServiceView {
         id: id.to_string(),
         provider: provider_hex,
@@ -444,6 +455,8 @@ pub async fn read_service(eth: &HttpEth, contract: &str, id: u64) -> Result<Serv
         provider_bond_usdc: abi::format_usdc(service.provider_bond_usdc),
         provider_bond_units: service.provider_bond_usdc.to_string(),
         active: service.active,
+        backed_by: published.map(|f| f.backed_by.clone()).unwrap_or_else(|| "unknown".to_string()),
+        backing: published.map(|f| f.backing.clone()),
         splits: split_views,
         required_bond_usdc: abi::format_usdc(required_bond),
         bond_covers_one_order: service.provider_bond_usdc >= required_bond,

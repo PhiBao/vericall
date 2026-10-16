@@ -71,6 +71,31 @@ export function Footer({ config, health, ledger }: FooterProps) {
             </div>
 
             <div>
+              <div className="fact__label">Model-backed services</div>
+              {health?.model_services ? (
+                health.model_services.configured ? (
+                  <>
+                    <div className="mono small">
+                      {health.model_services.daily_remaining} of {health.model_services.daily_budget} calls
+                      left today
+                    </div>
+                    <div className="tiny muted">
+                      TypeSafe Jev, bounded to {health.model_services.max_concurrent} at a time and{" "}
+                      {health.model_services.per_minute} a minute. A refused call is a failed call: the
+                      covenant refunds the caller and takes the penalty from the stake.
+                    </div>
+                  </>
+                ) : (
+                  <div className="small muted">
+                    no credential configured, so the two model-backed services report that they cannot run
+                  </div>
+                )
+              ) : (
+                <div className="small muted">the verifier has not reported them</div>
+              )}
+            </div>
+
+            <div>
               <div className="fact__label">Arc RPC</div>
               {(config?.rpcs ?? []).length > 0 ? (
                 <div className="stack--tight">

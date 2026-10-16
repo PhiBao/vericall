@@ -24,6 +24,8 @@ mod abi;
 mod chain;
 mod config;
 mod covenants;
+mod llm;
+mod services;
 mod eip712;
 mod executor;
 mod schema;
@@ -50,6 +52,8 @@ struct App {
     cfg: Arc<config::Config>,
     eth: chain::HttpEth,
     executor: executor::Executor,
+    /// The System One client behind the model-backed services.
+    jev: llm::JevClient,
     /// The covenants this verifier will attest to. Empty means none loaded, in
     /// which case it still measures and quotes but refuses to sign.
     registry: Arc<covenants::CovenantRegistry>,
@@ -99,10 +103,22 @@ async fn main() -> anyhow::Result<()> {
         }
     };
 
+    let jev = llm::JevClient::from_env();
+    if jev.configured() {
+        tracing::info!(
+            budget_per_day = jev.budget().daily,
+            per_minute = jev.budget().per_minute,
+            "TypeSafe Jev configured for the model-backed services"
+        );
+    } else {
+        tracing::warn!("no TYPESAFE_API_KEY: the model-backed services will report that they cannot run");
+    }
+
     let app_state = App {
         cfg: Arc::new(cfg.clone()),
         eth,
         executor,
+        jev,
         registry,
     };
 
@@ -192,7 +208,19 @@ struct Health {
     chain: Option<state::ChainStatus>,
     chain_error: Option<String>,
     mock_services: bool,
+    /// Whether the model-backed services have a credential, and what is left of
+    /// the budget that bounds them. Both are operational facts a caller deserves.
+    model_services: ModelServices,
     uptime_s: u64,
+}
+
+#[derive(Serialize)]
+struct ModelServices {
+    configured: bool,
+    daily_budget: u32,
+    daily_remaining: u32,
+    max_concurrent: u32,
+    per_minute: u32,
 }
 
 static STARTED: std::sync::OnceLock<Instant> = std::sync::OnceLock::new();
@@ -228,6 +256,13 @@ async fn health(State(app): State<App>) -> Response {
         chain,
         chain_error,
         mock_services: app.cfg.enable_mock_services,
+        model_services: ModelServices {
+            configured: app.jev.configured(),
+            daily_budget: app.jev.budget().daily,
+            daily_remaining: app.jev.budget_remaining(),
+            max_concurrent: app.jev.budget().max_concurrent,
+            per_minute: app.jev.budget().per_minute,
+        },
         uptime_s: started.elapsed().as_secs(),
     };
     Json(body).into_response()
@@ -257,10 +292,14 @@ struct PublicConfig {
 
 #[derive(Serialize)]
 struct FixturePublic {
-    slug: &'static str,
-    name: &'static str,
-    summary: &'static str,
-    price_usdc: &'static str,
+    slug: String,
+    name: String,
+    summary: String,
+    /// `deterministic` or `jev`. Shown in the UI, because "this endpoint is a
+    /// model call" changes what a latency promise means.
+    backed_by: String,
+    backing: String,
+    price_usdc: String,
     grace_latency_ms: u32,
     hard_timeout_ms: u32,
     max_rebate_bps: u16,
@@ -277,18 +316,20 @@ struct Eip712Public {
 }
 
 async fn get_config(State(app): State<App>) -> Response {
-    let fixtures = config::FIXTURES
+    let fixtures = config::fixtures()
         .iter()
         .map(|f| FixturePublic {
-            slug: f.slug,
-            name: f.name,
-            summary: f.summary,
-            price_usdc: f.price_usdc,
+            slug: f.slug.clone(),
+            name: f.name.clone(),
+            summary: f.summary.clone(),
+            backed_by: f.backed_by.clone(),
+            backing: f.backing.clone(),
+            price_usdc: f.price_usdc.clone(),
             grace_latency_ms: f.grace_latency_ms,
             hard_timeout_ms: f.hard_timeout_ms,
             max_rebate_bps: f.max_rebate_bps,
             slash_penalty_bps: f.slash_penalty_bps,
-            provider_split_bps: f.provider_split_bps,
+            provider_split_bps: f.provider_bps,
         })
         .collect();
 
@@ -748,7 +789,7 @@ async fn execute(State(app): State<App>, Json(req): Json<ExecuteRequest>) -> Res
         // whitespace — so a reformatted schema is the same schema, while a
         // genuine change of terms is a different hash. `scripts/lib/fixtures.ts`
         // implements the identical canonicalisation for the registration side.
-        let canonical = canonical_json(&fixture.schema_value());
+        let canonical = schema::canonical_json(&fixture.schema_value());
         let local_hash = executor::keccak256(canonical.as_bytes());
         let record_hash = record.schema_hash;
         if local_hash != record_hash {
@@ -790,7 +831,7 @@ async fn execute(State(app): State<App>, Json(req): Json<ExecuteRequest>) -> Res
             let mut body = req
                 .body
                 .clone()
-                .unwrap_or_else(|| default_body(fixture.slug, req.mode.as_deref(), req.seed));
+                .unwrap_or_else(|| default_body(&fixture.slug, req.mode.as_deref(), req.seed));
             if let Some(obj) = body.as_object_mut() {
                 if let Some(mode) = &req.mode {
                     obj.insert("mode".into(), serde_json::json!(mode));
@@ -869,7 +910,7 @@ async fn execute(State(app): State<App>, Json(req): Json<ExecuteRequest>) -> Res
         url: url.clone(),
         method: executor::Method::Post,
         body: Some(body_verbatim.clone()),
-        headers: vec![("x-vericall-fixture".into(), fixture.slug.into())],
+        headers: vec![("x-vericall-fixture".into(), fixture.slug.clone())],
         // Give the service enough room to answer at or past the hard edge; a
         // timeout must be a measured breach, not a client-side abort at the SLA.
         timeout_ms: fixture.hard_timeout_ms.saturating_add(2_000),
@@ -895,7 +936,7 @@ async fn execute(State(app): State<App>, Json(req): Json<ExecuteRequest>) -> Res
                 checked_against: format!(
                     "schema 0x{}",
                     hex::encode(recorded_schema_hash.unwrap_or_else(|| executor::keccak256(
-                        canonical_json(&schema_value).as_bytes()
+                        schema::canonical_json(&schema_value).as_bytes()
                     )))
                 ),
             }
@@ -1142,44 +1183,6 @@ async fn execute(State(app): State<App>, Json(req): Json<ExecuteRequest>) -> Res
     .into_response()
 }
 
-/// Serialise a JSON value deterministically: object keys sorted, no whitespace.
-/// Shared with the operator scripts so a covenant's schema commitment is the
-/// same string on both sides.
-fn canonical_json(value: &serde_json::Value) -> String {
-    fn write(value: &serde_json::Value, out: &mut String) {
-        match value {
-            serde_json::Value::Object(map) => {
-                let mut keys: Vec<&String> = map.keys().collect();
-                keys.sort();
-                out.push('{');
-                for (index, key) in keys.iter().enumerate() {
-                    if index > 0 {
-                        out.push(',');
-                    }
-                    out.push_str(&serde_json::to_string(key).expect("a string serialises"));
-                    out.push(':');
-                    write(&map[*key], out);
-                }
-                out.push('}');
-            }
-            serde_json::Value::Array(items) => {
-                out.push('[');
-                for (index, item) in items.iter().enumerate() {
-                    if index > 0 {
-                        out.push(',');
-                    }
-                    write(item, out);
-                }
-                out.push(']');
-            }
-            other => out.push_str(&other.to_string()),
-        }
-    }
-    let mut out = String::new();
-    write(value, &mut out);
-    out
-}
-
 fn default_body(slug: &str, mode: Option<&str>, seed: Option<u64>) -> serde_json::Value {
     let _ = mode;
     let _ = seed;
@@ -1194,6 +1197,26 @@ fn default_body(slug: &str, mode: Option<&str>, seed: Option<u64>) -> serde_json
         "ast-auditor" => serde_json::json!({
             "contractName": "Treasury",
             "source": "contract Treasury { function pay(address to, uint256 amt) external { (bool ok,) = to.call{value: amt}(\"\"); require(ok); } }"
+        }),
+        // The model-backed services take real input, not a mode switch: the
+        // latency you get is the latency the model takes.
+        "intent-router" => serde_json::json!({
+            "instruction": "Pay the hosting invoice for 126 EUR to Nordwind before the 1st, and share it 70/30 with the design studio"
+        }),
+        "payment-guard" => serde_json::json!({
+            "payment": {
+                "amount": 4800,
+                "currency": "USDC",
+                "counterparty": "0x9f2c4b1e8a7d6c5b4a3928170f6e5d4c3b2a1908",
+                "memo": "URGENT final demand - wire today, no time for checks",
+                "requestedBy": "unknown@example.com"
+            },
+            "recentPayments": [{
+                "counterparty": "0x15AB8109378736FA1C1C401175d375DB9b1dAC4B",
+                "amount": 126,
+                "currency": "USDC",
+                "memo": "Hosting October"
+            }]
         }),
         _ => serde_json::json!({}),
     }
@@ -1226,6 +1249,59 @@ struct KernelRequest {
     rest: serde_json::Map<String, serde_json::Value>,
 }
 
+impl KernelRequest {
+    /// The request as JSON, minus the fields the harness owns. The model-backed
+    /// services read their input from this, so `mode` never reaches a prompt.
+    fn payload(&self) -> serde_json::Value {
+        let mut map = self.rest.clone();
+        map.remove("mode");
+        serde_json::Value::Object(map)
+    }
+}
+
+/// Run a model-backed service and return its typed document.
+///
+/// A failure here is returned as an HTTP error, which is the honest signal: the
+/// verifier records it as a failed call, the covenant treats it as a breach, and
+/// the caller is refunded. A service that cannot answer should not be able to
+/// pretend it did.
+async fn model_backed(app: &App, slug: &str, req: &KernelRequest) -> Response {
+    if !app.cfg.enable_mock_services {
+        return problem(StatusCode::NOT_FOUND, "built-in services are disabled");
+    }
+    if !app.jev.configured() {
+        return problem(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "no TYPESAFE_API_KEY is configured on this verifier, so the model-backed services cannot run",
+        );
+    }
+
+    let payload = req.payload();
+    let outcome = match slug {
+        "intent-router" => services::intent_router(&app.jev, &payload).await,
+        _ => services::payment_guard(&app.jev, &payload).await,
+    };
+
+    match outcome {
+        Ok(document) => Json(document).into_response(),
+        Err(llm::JevError::DailyBudgetSpent { limit }) => problem(
+            StatusCode::SERVICE_UNAVAILABLE,
+            format!(
+                "the deployment's TypeSafe budget of {limit} model calls for today is spent; it resets at 00:00 UTC",
+            ),
+        ),
+        Err(llm::JevError::TooManyConcurrent { limit }) => problem(
+            StatusCode::TOO_MANY_REQUESTS,
+            format!("this verifier is already running {limit} model call(s); retry shortly"),
+        ),
+        Err(llm::JevError::RateLimited { used, limit }) => problem(
+            StatusCode::TOO_MANY_REQUESTS,
+            format!("{used} model calls this minute against a limit of {limit}"),
+        ),
+        Err(err) => problem(StatusCode::BAD_GATEWAY, format!("the model call failed: {err}")),
+    }
+}
+
 /// A deterministic latency, derived from the response to make the numbers
 /// reproducible: no sleeps that vary run to run, no flaky demo.
 async fn gate(mode: &str, fixture: &config::ServiceFixture) {
@@ -1251,14 +1327,31 @@ async fn kernel(
     let Some(fixture) = config::fixture(&slug) else {
         return problem(StatusCode::NOT_FOUND, format!("`{slug}` is not a built-in service"));
     };
+    let is_model_backed = matches!(slug.as_str(), "intent-router" | "payment-guard");
+    if is_model_backed {
+        // There is no latency to inject: the model call is the latency, and it is
+        // the point of putting a model under an SLA.
+        if req.mode.is_some() {
+            tracing::debug!("ignoring `mode` for the model-backed service {slug}");
+        }
+    }
+
     let mode = req.mode.clone().unwrap_or_else(|| "normal".to_string());
-    if !matches!(mode.as_str(), "normal" | "degraded" | "breach") {
+    if !is_model_backed && !matches!(mode.as_str(), "normal" | "degraded" | "breach") {
         return problem(
             StatusCode::BAD_REQUEST,
             "mode must be normal, degraded or breach".to_string(),
         );
     }
-    gate(&mode, fixture).await;
+    if !is_model_backed {
+        gate(&mode, fixture).await;
+    }
+
+    // Model-backed services: the same route, the same measurement, a different
+    // thing producing the response.
+    if matches!(slug.as_str(), "intent-router" | "payment-guard") {
+        return model_backed(&app, &slug, &req).await;
+    }
 
     match slug.as_str() {
         "risk-scorer" => {
@@ -1323,48 +1416,5 @@ async fn kernel(
             .into_response()
         }
         _ => problem(StatusCode::NOT_FOUND, "unknown service"),
-    }
-}
-
-#[cfg(test)]
-mod canonical_json_tests {
-    use super::canonical_json;
-
-    #[test]
-    fn canonicalisation_ignores_formatting_but_not_content() {
-        let a: serde_json::Value = serde_json::from_str("{\n  \"type\": \"object\",\n  \"required\": [\"x\"]\n}").unwrap();
-        let b: serde_json::Value = serde_json::from_str("{\"required\":[\"x\"],\"type\":\"object\"}").unwrap();
-        assert_eq!(canonical_json(&a), "{\"required\":[\"x\"],\"type\":\"object\"}");
-        assert_eq!(canonical_json(&a), canonical_json(&b), "key order must not matter");
-
-        let c: serde_json::Value = serde_json::from_str("{\"required\":[\"y\"],\"type\":\"object\"}").unwrap();
-        assert_ne!(canonical_json(&a), canonical_json(&c), "a changed schema must change the hash");
-    }
-
-    #[test]
-    fn nested_and_typed_values_are_stable() {
-        let value: serde_json::Value = serde_json::from_str(
-            "{\"properties\":{\"score\":{\"maximum\":100,\"type\":\"number\"}},\"type\":\"object\"}",
-        )
-        .unwrap();
-        assert_eq!(
-            canonical_json(&value),
-            "{\"properties\":{\"score\":{\"maximum\":100,\"type\":\"number\"}},\"type\":\"object\"}"
-        );
-    }
-
-    #[test]
-    fn fixture_schemas_canonicalise_the_same_way_on_both_sides() {
-        // These are the hashes `scripts/lib/fixtures.ts` produces for the same
-        // literals; a drift here means registration and validation disagree.
-        for fixture in crate::config::FIXTURES {
-            let canonical = canonical_json(&fixture.schema_value());
-            assert!(
-                canonical.starts_with('{') && canonical.ends_with('}'),
-                "{}: {canonical}",
-                fixture.slug
-            );
-            assert!(!canonical.contains('\n'), "{}: canonical form must not contain newlines", fixture.slug);
-        }
     }
 }

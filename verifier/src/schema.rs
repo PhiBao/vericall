@@ -940,3 +940,75 @@ mod tests {
         assert!(!regex_lite("z", "abc").unwrap());
     }
 }
+
+/// Serialise a JSON value deterministically: object keys sorted, no whitespace.
+///
+/// This is the form a covenant's schema commitment is taken over, on both sides
+/// of the wire. Canonicalising rather than hashing the literal text means a
+/// reformatted schema is the same schema, while any change to the constraints is
+/// a different hash — which is exactly the distinction an agreement needs.
+pub fn canonical_json(value: &serde_json::Value) -> String {
+    fn write(value: &serde_json::Value, out: &mut String) {
+        match value {
+            serde_json::Value::Object(map) => {
+                let mut keys: Vec<&String> = map.keys().collect();
+                keys.sort();
+                out.push('{');
+                for (index, key) in keys.iter().enumerate() {
+                    if index > 0 {
+                        out.push(',');
+                    }
+                    out.push_str(&serde_json::to_string(key).expect("a string serialises"));
+                    out.push(':');
+                    write(&map[*key], out);
+                }
+                out.push('}');
+            }
+            serde_json::Value::Array(items) => {
+                out.push('[');
+                for (index, item) in items.iter().enumerate() {
+                    if index > 0 {
+                        out.push(',');
+                    }
+                    write(item, out);
+                }
+                out.push(']');
+            }
+            other => out.push_str(&other.to_string()),
+        }
+    }
+    let mut out = String::new();
+    write(value, &mut out);
+    out
+}
+
+#[cfg(test)]
+mod canonical_json_tests {
+    use super::canonical_json;
+
+    #[test]
+    fn canonicalisation_ignores_formatting_but_not_content() {
+        let a: serde_json::Value =
+            serde_json::from_str("{\n  \"type\": \"object\",\n  \"required\": [\"x\"]\n}").unwrap();
+        let b: serde_json::Value =
+            serde_json::from_str("{\"required\":[\"x\"],\"type\":\"object\"}").unwrap();
+        assert_eq!(canonical_json(&a), "{\"required\":[\"x\"],\"type\":\"object\"}");
+        assert_eq!(canonical_json(&a), canonical_json(&b), "key order must not matter");
+
+        let c: serde_json::Value =
+            serde_json::from_str("{\"required\":[\"y\"],\"type\":\"object\"}").unwrap();
+        assert_ne!(canonical_json(&a), canonical_json(&c), "a changed schema must change the hash");
+    }
+
+    #[test]
+    fn nested_and_typed_values_are_stable() {
+        let value: serde_json::Value = serde_json::from_str(
+            "{\"properties\":{\"score\":{\"maximum\":100,\"type\":\"number\"}},\"type\":\"object\"}",
+        )
+        .unwrap();
+        assert_eq!(
+            canonical_json(&value),
+            "{\"properties\":{\"score\":{\"maximum\":100,\"type\":\"number\"}},\"type\":\"object\"}"
+        );
+    }
+}

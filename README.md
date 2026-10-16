@@ -50,15 +50,35 @@ Order 2 is worth reading closely: the call ran for **1250 ms**, one millisecond 
 
 Order 4 is the one to check first if you are reviewing: its attestation was produced by the **live deployment** at `vericall.fly.dev`, which dialled its own public endpoint over HTTPS, measured the 129 ms itself, validated the schema, and signed. Nothing about that settlement came from a developer's laptop.
 
-### What seven calls did to three wallets
+### Model calls under the same covenant
+
+| # | Service | Verdict | Measured | What the chain did | Transaction |
+| --- | --- | --- | --- | --- | --- |
+| 8 | `intent-router` (**Jev**) | **Pass** | 251 ms, schema valid | 0.04 USDC → provider, 0.01 → dependency | [`0x6370fb2f…`](https://explorer.arc.io/tx/0x6370fb2f945fcda6cd6a36770bcc9c449d3d6ba8564ec2b51ba8936190cc4fa1) |
+| 11 | `payment-guard` (**Jev**, refusing) | **Breach** | HTTP 429, schema violated | **0.096697 USDC** to the caller: the 0.08 escrow refunded plus 0.02 slashed from the stake | [`0x586230ca…`](https://explorer.arc.io/tx/0x586230cac965d342ff09679ab5e1873098c133b231911ae82a0616e59d434c48) |
+
+Order 8 is a model call settled by measurement: the verifier ran the Jev request,
+validated the returned probabilities against the covenant's schema, and the
+contract paid out in the same second.
+
+Order 11 is the one worth reading. `scripts/demo-outage.ts` spends the service's
+own per-minute model budget with real requests until it starts refusing them —
+the 429 is the service's, not an injected failure — then settles the order while
+it is refusing. The verifier measures the refusal, the schema check fails with it,
+and the covenant pays the caller back out of the provider's stake. **A model
+outage is priced the same way a slow endpoint is**, which is the claim that makes
+this more than a demo. The script says in its own output what was orchestrated
+(the outage) and what was the contract's own arithmetic (everything after it).
+
+### What nine calls did to three wallets
 
 | Wallet | Role | Before | After | Change |
 | --- | --- | --- | --- | --- |
-| [`0x4AB5…e555`](https://explorer.arc.io/address/0x4AB5e7F2b5464B9494b49EFE41C2f00e7bcfE555) | caller | 1.300 USDC | 0.375 USDC | **−0.925** — paid for seven calls and their gas: this is the customer |
+| [`0x4AB5…e555`](https://explorer.arc.io/address/0x4AB5e7F2b5464B9494b49EFE41C2f00e7bcfE555) | caller | 1.300 USDC | 0.141 USDC | **−1.159** — paid for nine calls and their gas, and got two of them back: this is the customer |
 | [`0x15AB…ac4b`](https://explorer.arc.io/address/0x15AB8109378736FA1C1C401175d375DB9b1dAC4B) | provider | 0.300 USDC | 0.503 USDC | **+0.203** — revenue from settled calls, less the stake it put behind them and the penalties it paid |
 | [`0x0382…1e67`](https://explorer.arc.io/address/0x0382bca3Fc934169a43c7ebe1Ee4B4d6A69C1e67) | upstream dependency | 0.004 USDC | 0.195 USDC | **+0.191**, a 48× increase, earned entirely as per-call royalty splits |
 
-The dependency's row is the product thesis in one line. It started with dust and holds 0.19 USDC now, because every successful call that used it paid it 20% or 30% of the price in the same transaction that paid the provider — no invoice, no monthly reconciliation, no custodian. Paying a contributor a 0.03 USDC share of a 0.15 USDC call is impossible on card rails and uneconomic on most chains; here it cost about 0.0001 USDC to include.
+The dependency's row is the product thesis in one line. It started with dust and holds 0.19 USDC now, because every successful call that used it paid it 20%, 25% or 30% of the price in the same transaction that paid the provider — no invoice, no monthly reconciliation, no custodian. Paying a contributor a 0.03 USDC share of a 0.15 USDC call is impossible on card rails and uneconomic on most chains; here it cost about 0.0001 USDC to include.
 
 ### The transactions are found from the chain, not remembered
 
@@ -70,7 +90,7 @@ The order ledger does not get its transaction hashes from the scripts that ran t
 node scripts/verify.ts --network arc-mainnet
 ```
 
-23 checks, no wallet, no spending: the bytecode exists at the recorded address, each covenant matches the chain term-for-term including the split table and the schema commitment, each settled order's recorded payouts are reproducible from the covenant's own rates, and the contract's balance is never less than the escrow and bonds it owes. The same script passes on Arc testnet.
+31 checks, no wallet, no spending: the bytecode exists at the recorded address, each covenant matches the chain term-for-term including the split table and the schema commitment, each settled order's recorded payouts are reproducible from the covenant's own rates, and the contract's balance is never less than the escrow and bonds it owes. The same script passes on Arc testnet.
 
 The project also carries a live check the app performs on every read: `totalEscrowed()` must equal the sum of funded orders' escrow. When a settlement is in flight the two disagree for as long as it takes Arc to include the next block — under a second.
 
@@ -88,6 +108,37 @@ VeriCall is not a generic escrow that happens to run on an EVM chain. Three prop
 
 ![The settlement curve: full payout until the grace latency, a rebate rising linearly to the covenant's maximum at the hard timeout, and a full refund plus a bond penalty beyond it](docs/assets/sla-curve.svg)
 
+### Two of the services are model calls
+
+Four of the published covenants sit on deterministic endpoints — fixed logic, fixed
+latency. The other two sit on a real **TypeSafe Jev** call, which is the more
+interesting case and the reason the model-backed pair exists:
+
+| Service | Price | Grace / hard | What answers |
+| --- | --- | --- | --- |
+| `intent-router` | 0.05 USDC | 2.5 s / 10 s | One batched Jev request: a Choice over five payment intents, two Nouls for presence, a Score for urgency, a Noul for whether a person must authorise. Returns the full probability distribution, the model's confidence, and what is missing. |
+| `payment-guard` | 0.08 USDC | 3 s / 12 s | One batched Jev request: five hazard Nouls (amount, counterparty, duplication, urgency pressure, restricted party) plus a severity Score. The verdict is computed in code from published thresholds. |
+
+Putting a model under an SLA is only honest if the promise is one a model can
+keep, so two design choices matter:
+
+* **The answer is typed, not prose.** A System One model returns calibrated
+  probabilities, which means a covenant can *require* `intentProbability` and
+  `confidence` in its schema and mean it. A schema over generated text would be a
+  hope that the model happened to return valid JSON — which is exactly the failure
+  mode VeriCall exists to price, not a property it should rely on.
+* **Policy is code, not a prompt.** Jev supplies probabilities; the verdict comes
+  from thresholds in `verifier/src/llm.rs` that a reader can find and change
+  without another inference. The response carries the thresholds it used, so a
+  caller with a different risk appetite can apply its own to the same evidence.
+
+Every call spends real credits, and the live endpoint is public, so the client is
+bounded three ways — two concurrent calls, twelve a minute, three hundred a day —
+and `GET /api/health` reports what is left. A refused call is a *failed* call:
+the verifier measures the refusal, the schema check fails, and the covenant
+refunds the caller out of the provider's stake. That is demonstrated, not
+asserted — see below.
+
 ### The five moving parts
 
 | Part | Where | What it is |
@@ -97,6 +148,7 @@ VeriCall is not a generic escrow that happens to run on an EVM chain. Three prop
 | **App** | `web/src/` | A React front end that reads the chain directly, runs live calls through the verifier, draws the settlement curve, and settles from a connected wallet. Useful with no wallet at all: the proof ledger is read-only. |
 | **Operator scripts** | `web/scripts/` | `deploy`, `plan-covenants`, `register`, `order`, `settle`, `bond`, `reclaim`, `verify` — every step of the lifecycle, each printing the explorer link and the fee it spent. |
 | **Records** | `deployments/` | What actually exists onchain: contract addresses, transaction hashes, block numbers, and the covenant terms as registered, so any step can be reproduced and any claim checked. |
+| **Service definitions** | `fixtures/services.json` | One source of truth for every published service. The Rust verifier embeds it and the tooling reads it, so the terms a covenant is registered with are the terms the verifier prices against, and the schema it validates against is the schema that was committed onchain. |
 
 ### The order lifecycle
 
@@ -207,6 +259,35 @@ pnpm dev                  # proxies /api to the verifier on :8787
 pnpm build                # dist/, which the verifier can serve with VERICALL_STATIC_DIR
 pnpm typecheck
 ```
+
+### Wallet behaviour, checked rather than assumed
+
+```bash
+cd web
+pnpm test:wallet     # 11 checks against a stubbed EIP-1193 provider
+```
+
+Connecting lands the wallet on the settlement chain in one action — the switch is
+attempted immediately after the connection is granted, and a refusal leaves the
+connection intact with the reason kept so the masthead can offer the switch again
+rather than silently signing on the wrong chain.
+
+Disconnecting clears the page's session and asks the wallet to drop the account
+permission it granted. There is no standard "disconnect" in EIP-1193: a page cannot
+un-authorise itself, and wallets that do not implement `wallet_revokePermissions`
+return an error rather than honouring it. The button says so in its tooltip, the
+local session clears either way, and the test asserts both.
+
+### Pricing an outage
+
+```bash
+cd web
+node scripts/demo-outage.ts --network arc-mainnet --confirm-mainnet
+```
+
+Escrows one call, spends the service's own model budget until it refuses, settles
+while it is refusing, and prints what the covenant did about it. The refusal is the
+service's; the arithmetic afterwards is the contract's.
 
 ### The lifecycle, by hand
 

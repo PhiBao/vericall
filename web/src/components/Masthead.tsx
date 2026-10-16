@@ -105,6 +105,19 @@ function WalletControl({ wallet }: { wallet: WalletController }) {
             </button>
           </>
         )}
+        {/*
+          "Disconnect" is quoted by the tooltip because a page cannot revoke its
+          own authorisation: this clears the session here and asks the wallet to
+          drop the permission where that method exists.
+        */}
+        <button
+          type="button"
+          className="button button--quiet"
+          onClick={() => void wallet.disconnect()}
+          title="Forget this session in the page, and ask the wallet to drop this page's account permission where it supports that."
+        >
+          Disconnect
+        </button>
       </div>
     );
   }

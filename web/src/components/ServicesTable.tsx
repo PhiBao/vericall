@@ -57,7 +57,12 @@ export function ServicesTable({ services, explorer }: ServicesTableProps) {
                   <div className="row">
                     <span className="mono">#{service.id}</span>
                     <strong>{service.name}</strong>
-                    {service.active ? null : <span className="tag tag--muted">inactive</span>}
+                    {service.backed_by === "jev" ? (
+                      <span className="tag tag--verified tag--inline" title={service.backing ?? undefined}>
+                        model-backed
+                      </span>
+                    ) : null}
+                    {service.active ? null : <span className="tag tag--muted tag--inline">inactive</span>}
                   </div>
                   <div className="tiny muted mono" title={service.endpoint_uri}>
                     {hostOf(service.endpoint_uri)}

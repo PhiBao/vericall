@@ -17,7 +17,10 @@
     "verify": "node --experimental-strip-types --no-warnings scripts/verify.ts",
     "demo": "node --experimental-strip-types --no-warnings scripts/demo.ts",
     "plan": "node --experimental-strip-types --no-warnings scripts/plan-covenants.ts",
-    "bond": "node --experimental-strip-types --no-warnings scripts/bond.ts"
+    "bond": "node --experimental-strip-types --no-warnings scripts/bond.ts",
+    "test:wallet": "node --experimental-strip-types --no-warnings scripts/test-wallet.ts",
+    "test": "pnpm typecheck && pnpm test:wallet",
+    "demo:outage": "node --experimental-strip-types --no-warnings scripts/demo-outage.ts"
   },
   "dependencies": {
     "react": "^19.0.0",

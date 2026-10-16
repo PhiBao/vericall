@@ -30,6 +30,14 @@ export interface VerifierHealth {
   chain: { block_number: number; endpoint: string; latency_ms: number } | null;
   chain_error: string | null;
   mock_services: boolean;
+  /** Whether the model-backed services have a credential, and what bounds them. */
+  model_services: {
+    configured: boolean;
+    daily_budget: number;
+    daily_remaining: number;
+    max_concurrent: number;
+    per_minute: number;
+  };
 }
 
 export interface Attestation {

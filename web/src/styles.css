@@ -1195,3 +1195,11 @@ details[open] > summary {
 .panel--ledger {
   grid-column: 1 / -1;
 }
+
+/* A chip that sits inside a line of text rather than after it. */
+.tag--inline {
+  margin-left: var(--gap-2);
+  vertical-align: middle;
+  text-transform: none;
+  letter-spacing: 0.02em;
+}

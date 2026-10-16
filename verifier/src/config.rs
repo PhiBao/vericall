@@ -193,131 +193,70 @@ fn env_str(name: &str) -> Option<String> {
     std::env::var(name).ok().filter(|v| !v.trim().is_empty())
 }
 
-/// One of the built-in services used to demonstrate the protocol end to end.
+/// The published services, loaded from `fixtures/services.json`.
 ///
-/// These are real HTTP endpoints with real latency characteristics and real
-/// (deterministic) output — not stubs. They exist so a judge can exercise the
-/// whole path without owning an API, and so the demo is reproducible: every
-/// fixture pins its latency rather than hoping a network cooperates.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// One source of truth, embedded at compile time and parsed once. Writing the
+/// terms out twice — once for the verifier and once for the tooling that
+/// registers them — is how a covenant ends up priced against different numbers
+/// than it was registered with, and the schema is the part that must not drift:
+/// the verifier refuses to attest unless the schema it validates against hashes
+/// to what the covenant committed to.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ServiceFixture {
-    pub slug: &'static str,
-    pub name: &'static str,
-    pub summary: &'static str,
-    pub path: &'static str,
-    pub schema_json: &'static str,
-    pub price_usdc: &'static str,
+    pub slug: String,
+    pub name: String,
+    pub summary: String,
+    /// The path this service answers on, relative to the verifier's base URL.
+    pub path: String,
+    /// `deterministic` or `jev`: what actually produces the response.
+    pub backed_by: String,
+    /// One sentence on what is behind the endpoint, shown to a reader.
+    pub backing: String,
+    /// The JSON Schema a passing response must satisfy.
+    pub schema: serde_json::Value,
+    pub price_usdc: String,
     pub grace_latency_ms: u32,
     pub hard_timeout_ms: u32,
     pub max_rebate_bps: u16,
     pub slash_penalty_bps: u16,
-    pub provider_split_bps: u16,
+    /// The provider's share; the remainder goes to the upstream dependency.
+    pub provider_bps: u16,
+    pub initial_bond_usdc: String,
 }
 
-/// The three covenants the demo registers. Each is a plausible paid endpoint on
-/// a machine-payments marketplace; together they cover a pass, a degraded
-/// settlement and a hard breach with distinct split shapes.
-pub const FIXTURES: &[ServiceFixture] = &[
-    ServiceFixture {
-        slug: "risk-scorer",
-        name: "Counterparty Risk Scorer",
-        summary: "Scores a counterparty from sanctions and adverse-media signals before a payment is released.",
-        path: "/mock/risk-scorer",
-        schema_json: r#"{
-  "type": "object",
-  "required": ["score", "band", "checks", "asOf"],
-  "properties": {
-    "score": { "type": "number", "minimum": 0, "maximum": 100 },
-    "band": { "type": "string", "enum": ["low", "medium", "high"] },
-    "checks": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
-    "asOf": { "type": "integer", "minimum": 1 }
-  },
-  "additionalProperties": false
-}"#,
-        price_usdc: "0.2",
-        grace_latency_ms: 500,
-        hard_timeout_ms: 2000,
-        max_rebate_bps: 4000,
-        slash_penalty_bps: 2000,
-        provider_split_bps: 8000,
-    },
-    ServiceFixture {
-        slug: "invoice-parser",
-        name: "Invoice Field Extractor",
-        summary: "Turns a PDF or email invoice into typed fields a payment run can act on.",
-        path: "/mock/invoice-parser",
-        schema_json: r#"{
-  "type": "object",
-  "required": ["invoiceId", "currency", "amount", "lines"],
-  "properties": {
-    "invoiceId": { "type": "string", "pattern": "^INV-[0-9]{4,}$" },
-    "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
-    "amount": { "type": "integer", "minimum": 1 },
-    "lines": {
-      "type": "array",
-      "minItems": 1,
-      "items": {
-        "type": "object",
-        "required": ["sku", "amount"],
-        "properties": {
-          "sku": { "type": "string", "minLength": 3 },
-          "amount": { "type": "integer", "minimum": 1 }
-        }
-      }
-    }
-  },
-  "additionalProperties": false
-}"#,
-        price_usdc: "0.15",
-        grace_latency_ms: 400,
-        hard_timeout_ms: 1500,
-        max_rebate_bps: 5000,
-        slash_penalty_bps: 2500,
-        provider_split_bps: 7000,
-    },
-    ServiceFixture {
-        slug: "ast-auditor",
-        name: "Contract Surface Auditor",
-        summary: "Reports the external surface and risky patterns of a Solidity source file.",
-        path: "/mock/ast-auditor",
-        schema_json: r#"{
-  "type": "object",
-  "required": ["contractName", "highRisk", "findings"],
-  "properties": {
-    "contractName": { "type": "string", "minLength": 1 },
-    "highRisk": { "type": "integer", "minimum": 0 },
-    "findings": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "required": ["rule", "severity"],
-        "properties": {
-          "rule": { "type": "string" },
-          "severity": { "type": "string", "enum": ["info", "low", "medium", "high", "critical"] }
-        }
-      }
-    }
-  },
-  "additionalProperties": false
-}"#,
-        price_usdc: "0.5",
-        grace_latency_ms: 1000,
-        hard_timeout_ms: 3000,
-        max_rebate_bps: 3000,
-        slash_penalty_bps: 1500,
-        provider_split_bps: 9000,
-    },
-];
+#[derive(Debug, Deserialize)]
+struct FixtureFile {
+    services: Vec<ServiceFixture>,
+}
+
+/// Embedded rather than read at runtime: the file is part of the binary's
+/// definition of what it may attest to, so a missing or edited file is a build
+/// input, not an operational surprise.
+const FIXTURES_JSON: &str = include_str!("../../fixtures/services.json");
+
+static FIXTURES: std::sync::OnceLock<Vec<ServiceFixture>> = std::sync::OnceLock::new();
+
+/// The published services. Panics only if the embedded file is malformed, which
+/// the tests below catch at build time.
+pub fn fixtures() -> &'static [ServiceFixture] {
+    FIXTURES.get_or_init(|| {
+        let file: FixtureFile =
+            serde_json::from_str(FIXTURES_JSON).expect("fixtures/services.json is well formed");
+        assert!(!file.services.is_empty(), "fixtures/services.json defines no services");
+        file.services
+    })
+}
 
 pub fn fixture(slug: &str) -> Option<&'static ServiceFixture> {
-    FIXTURES.iter().find(|f| f.slug == slug)
+    fixtures().iter().find(|f| f.slug == slug)
 }
 
 impl ServiceFixture {
     /// The covenant terms as the settlement engine sees them, with the provider
     /// first so its share absorbs division remainder.
     pub fn terms(&self, provider: [u8; 20], dependency: [u8; 20]) -> CovenantTerms {
-        let provider_bps = self.provider_split_bps;
+        let provider_bps = self.provider_bps;
         let dep_bps = 10_000 - provider_bps;
         let splits = vec![
             Split::new(provider, provider_bps),
@@ -328,8 +267,8 @@ impl ServiceFixture {
             hard_timeout_ms: self.hard_timeout_ms,
             max_rebate_bps: self.max_rebate_bps,
             slash_penalty_bps: self.slash_penalty_bps,
-            call_price_usdc: crate::abi::parse_usdc(self.price_usdc)
-                .expect("fixture price is a valid USDC amount")
+            call_price_usdc: crate::abi::parse_usdc(&self.price_usdc)
+                .expect("a fixture price is a valid USDC amount")
                 .to::<u64>(),
             splits,
             provider_index: 0,
@@ -337,7 +276,13 @@ impl ServiceFixture {
     }
 
     pub fn schema_value(&self) -> serde_json::Value {
-        serde_json::from_str(self.schema_json).expect("fixture schema is valid JSON")
+        self.schema.clone()
+    }
+
+    /// True when the endpoint's response is produced by a model rather than by
+    /// fixed logic. The distinction is shown to a reader, never hidden.
+    pub fn is_model_backed(&self) -> bool {
+        self.backed_by == "jev"
     }
 }
 
@@ -348,11 +293,11 @@ mod tests {
 
     #[test]
     fn fixtures_define_valid_covenants() {
-        for f in FIXTURES {
+        for f in fixtures() {
             assert!(f.grace_latency_ms <= f.hard_timeout_ms, "{}", f.slug);
             assert!(f.max_rebate_bps <= 10_000, "{}", f.slug);
             assert!(f.slash_penalty_bps <= 10_000, "{}", f.slug);
-            assert!(f.provider_split_bps > 0 && f.provider_split_bps < 10_000, "{}", f.slug);
+            assert!(f.provider_bps > 0 && f.provider_bps < 10_000, "{}", f.slug);
             let terms = f.terms([0xAA; 20], [0xBB; 20]);
             terms.validate().unwrap_or_else(|e| panic!("{}: {e}", f.slug));
             // The schema must parse and be an object schema.
@@ -367,7 +312,7 @@ mod tests {
         // the pinned latencies the mock services honour.
         let risk = fixture("risk-scorer").unwrap();
         let terms = risk.terms([0xAA; 20], [0xBB; 20]);
-        let price = crate::abi::parse_usdc(risk.price_usdc).unwrap().to::<u64>();
+        let price = crate::abi::parse_usdc(&risk.price_usdc).unwrap().to::<u64>();
 
         let pass = terms.quote(price, 120, true, u64::MAX).unwrap();
         assert_eq!(pass.status, crate::sla::OrderStatus::SettledPass);
