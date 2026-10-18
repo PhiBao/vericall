@@ -36,9 +36,28 @@ the page is fully useful without one — say so, because that is a design decisi
 
 No slides. Say it over the live page.
 
-## 0:20–1:10 — the ledger is not a mock
+## 0:20–1:05 — the numbers are the argument
 
-On **vericall.fly.dev**, without connecting anything:
+Open **vericall.fly.dev**. Point at the strip under the headline before saying anything else:
+
+> "Eleven settled calls, four of the four outcomes the contract can reach, 1.54 USDC
+> through the contract, 0.4 staked against promises, and the invariant that catches an
+> accounting bug in either implementation. Every one of those numbers comes from the
+> contract's own storage, and each links to the transaction behind it."
+
+Then press **Run a live call**. It scrolls and runs by itself — say what happens while it does:
+
+> "That is a real GET to api.frankfurter.dev, the ECB reference rate. The verifier
+> measures it, checks the response against the schema the covenant committed to, and
+> returns the exact settlement payload. 61 milliseconds, so the provider is paid in
+> full — 0.021 here and 0.009 to its upstream dependency."
+
+Mention that the default covenant is deliberately the third-party one: "the first call
+a visitor makes is not to something I built."
+
+## 1:05–1:35 — the ledger is not a mock
+
+Still without connecting anything:
 
 - Point at the masthead: `ARC · 5042`, the block number, `via https://rpc.blockdaemon.mainnet.arc.io`
   — "that is the endpoint that answered this read, and there are two more if it does not."
@@ -52,7 +71,7 @@ On **vericall.fly.dev**, without connecting anything:
 - Scroll to **Published covenants** and point at the **bond** column: `needs 0.040000`.
   "A covenant cannot sell an order it cannot cover; the contract refuses at the point of sale."
 
-## 1:10–1:50 — the model-backed covenant
+## 1:35–2:10 — the model-backed covenant
 
 Switch the service picker to **Payment Intent Router** or **Payment Policy Guard**
 — the two labelled `model-backed`. Say why that label matters:
@@ -72,9 +91,21 @@ Mention the bounds, because a public endpoint spending real credits needs them:
 two concurrent calls, twelve a minute, three hundred a day, all reported by
 `/api/health`.
 
-## 1:50–2:20 — run a real call
+## 2:10–2:30 — the debit side: what a slow call costs
 
-Scroll to **Live call**:
+Scroll to the **Payoff curve** and drag the slider past the grace edge. Say the arithmetic
+rather than the adjective:
+
+> "At 1250 milliseconds on the risk covenant the rebate is 0.035097 — not 'about 3.5
+> cents'. One millisecond more and it is a different number, and quoteSettlement
+> returns the same one before you agree to anything."
+
+Point at the dots on the curve: those are the settled calls, placed where each was
+measured, with p50 and p95 drawn over them.
+
+## 2:30–2:50 — inspect the call itself
+
+In the **Live call** panel:
 
 - Mode **degraded**, press **Run call**.
 - Narrate the telemetry trace as it fills: the request hash, the measured latency, the schema
@@ -85,7 +116,7 @@ Scroll to **Live call**:
   refuses to sign unless the bytes it is about to send hash to what the caller wrote down onchain.
   Without that, you could point an order at a request you knew would fail and harvest the bond."
 
-## 2:20–2:50 — what a model outage costs
+## 2:50–3:20 — what a model outage costs
 
 ```bash
 cd web
@@ -101,7 +132,7 @@ node scripts/demo-outage.ts --network arc-mainnet --confirm-mainnet
 If the script reports that the budget refilled, re-run it inside the same minute —
 that is the mechanism working, not the demo failing.
 
-## 2:50–3:20 — the build in Arc Studio
+## 3:20–3:50 — the build in Arc Studio
 
 Switch to the **Arc Studio** tab:
 
@@ -114,16 +145,16 @@ Switch to the **Arc Studio** tab:
   whose grace latency equals its hard timeout divided by zero and reverted. That is fixed, with a
   fuzz test over it."
 
-## 3:20–3:50 — the parts that make it more than a demo
+## 3:50–4:20 — the parts that make it more than a demo
 
-- Terminal: `node web/scripts/verify.ts --network arc-mainnet` → **31 checks, all passed**, no key.
+- Terminal: `node web/scripts/verify.ts --network arc-mainnet` → **35 checks, all passed**, no key.
   "That is a judge's check, not mine: bytecode, every covenant term against the chain, every settled
   order's payouts reproducible from the covenant's own rates, and the money whole."
 - Point at the **dependency wallet**: `0.004 → 0.195 USDC`. "It started with dust. That is 48×, earned
   entirely as per-call royalty splits on seven API calls — no invoice, no reconciliation, no
   custodian. Paying someone 3 cents out of a 15-cent call is impossible on card rails."
 
-## 3:50–4:00 — connect and disconnect, in one breath
+## 4:20–4:30 — connect and disconnect, in one breath
 
 If you have a wallet: press **Connect wallet** and point out that it lands on Arc in
 the same action — no "switch network" dialog to discover afterwards. Then press
@@ -131,7 +162,7 @@ the same action — no "switch network" dialog to discover afterwards. Then pres
 so this clears the session here and asks the wallet to drop the permission where its
 API allows that.
 
-## 4:00–4:20 — why this is worth continuing
+## 4:30–4:50 — why this is worth continuing
 
 > "The primitive is general: metered SaaS, agent-to-agent task settlement, dependency royalties are
 > the same instrument with different terms. What it needs next is not more code — it is one provider
