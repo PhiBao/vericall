@@ -125,16 +125,14 @@ VeriCall is not a generic escrow that happens to run on an EVM chain. Three prop
 
 ![The settlement curve: full payout until the grace latency, a rebate rising linearly to the covenant's maximum at the hard timeout, and a full refund plus a bond penalty beyond it](docs/assets/sla-curve.svg)
 
-### Two of the services are model calls
-
-Four of the published covenants sit on deterministic endpoints — fixed logic, fixed
-latency. The other two sit on a real **TypeSafe Jev** call, which is the more
-interesting case and the reason the model-backed pair exists:
+### Six covenants, three kinds of service
 
 | Service | Price | Grace / hard | What answers |
 | --- | --- | --- | --- |
-| `intent-router` | 0.05 USDC | 2.5 s / 10 s | One batched Jev request: a Choice over five payment intents, two Nouls for presence, a Score for urgency, a Noul for whether a person must authorise. Returns the full probability distribution, the model's confidence, and what is missing. |
-| `payment-guard` | 0.08 USDC | 3 s / 12 s | One batched Jev request: five hazard Nouls (amount, counterparty, duplication, urgency pressure, restricted party) plus a severity Score. The verdict is computed in code from published thresholds. |
+| `fx-rate` | 0.03 USDC | 0.8 s / 2.5 s | **A third party's real API.** The ECB reference rate published by Frankfurter. The verifier calls `api.frankfurter.dev`, measures it, and validates the shape of what came back. |
+| `intent-router` | 0.05 USDC | 2.5 s / 10 s | One batched **TypeSafe Jev** request: a Choice over five payment intents, presence Nouls, a Score for urgency, a Noul for whether a person must authorise. Returns the whole distribution, the model's confidence, and what is missing. |
+| `payment-guard` | 0.08 USDC | 3 s / 12 s | One batched **Jev** request: five hazard Nouls (amount, counterparty, duplication, urgency pressure, restricted party) plus a severity Score. The verdict is computed in code from published thresholds. |
+| `risk-scorer`, `invoice-parser`, `ast-auditor` | 0.15–0.5 USDC | 0.4–1 s | **Reference services this project publishes**, so the settlement arithmetic can be inspected without depending on anyone. |
 
 The FX covenant is the one that answers "is this a simulation?" most directly: the
 call goes to a publisher this project does not control, and the settlement is the
@@ -213,7 +211,7 @@ Built for **Arc Microgrants: Built with Arc Studio** (Circle, October 2026).
 
 | Criterion | Weight | How this submission answers it |
 | --- | --- | --- |
-| Real USDC moving on Arc mainnet | 30% | **Nine** mainnet settlements across three distinct wallets and two covenants, covering every verdict the contract can reach — pass, degraded, breach and a pass attested by the live public verifier — each with a transaction hash and the exact amounts above. |
+| Real USDC moving on Arc mainnet | 30% | **Nine** mainnet settlements across three distinct wallets and five covenants, covering every verdict the contract can reach — pass, degraded, breach and a pass attested by the live public verifier — each with a transaction hash and the exact amounts above. |
 | Use of Arc Studio across the build | 25% | The contract, its Foundry test suite and its README were written, iterated and tested inside Arc Studio — workspace [`studio.arc.io/app/b3658244-c47e-4bb9-b1c5-3b34acc595cc`](https://studio.arc.io/app/b3658244-c47e-4bb9-b1c5-3b34acc595cc). Mainnet deployment, the verifier and the app were then built around that artefact; a second Studio turn built the in-workspace frontend. |
 | A working product | 25% | [vericall.fly.dev](https://vericall.fly.dev) — the app and the verifier in one process, serving a proof ledger that reads Arc mainnet over three independent RPC endpoints and a workbench that runs real calls and draws the settlement curve. Useful with no wallet at all; the one settlement in the table above that names the live verifier is the proof that path works. |
 | Potential to go further | 20% | The covenant is a general instrument: metered SaaS billing, agent-to-agent task settlement, and dependency royalties are the same primitive with different terms. A path into the Circle Grant Program is sketched under *Roadmap*. |
