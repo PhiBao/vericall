@@ -18,7 +18,7 @@ the promise is missed.**
 | --- | --- |
 | **Arc Studio project** | https://studio.arc.io/app/b3658244-c47e-4bb9-b1c5-3b34acc595cc |
 | **Live app** | https://vericall.fly.dev |
-| **Walkthrough video** | [`docs/assets/vericall-demo.mp4`](assets/vericall-demo.mp4) — two and a half minutes, recorded against a local instance of the deployed build, settling a real order on mainnet and showing that transaction on Arc's explorer |
+| **Walkthrough video** | [`docs/assets/vericall-demo.mp4`](assets/vericall-demo.mp4) — three minutes, starting with the Arc Studio session through Circle's CLI, settling a real order on mainnet, and showing that transaction on Arc's explorer |
 | **Public repository** | https://github.com/PhiBao/vericall |
 | **Builder profile** | https://github.com/PhiBao |
 | **Contract (Arc mainnet)** | [`0xb980fa2a21b09a7304da285187f67daf55600619`](https://explorer.arc.io/address/0xb980fa2a21b09a7304da285187f67daf55600619) |

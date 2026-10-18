@@ -27,17 +27,18 @@ The rebate is not a policy decision made by a human after the fact. It is arithm
 
 ## The walkthrough
 
-[`docs/assets/vericall-demo.mp4`](docs/assets/vericall-demo.mp4) — two and a half minutes, no slides:
+[`docs/assets/vericall-demo.mp4`](docs/assets/vericall-demo.mp4) — three minutes, no slides:
 
 | Beat | What it shows |
 | --- | --- |
 | 0:00 | The problem: software pays software in advance and has no recourse |
-| 0:16 | The live app on Arc mainnet. A real call to `api.frankfurter.dev` — the ECB's reference rate, a publisher this project does not run — measured at 196 ms and checked against the covenant's schema |
-| 0:35 | The settlement curve: what a given overrun costs, with the covenant's own settled calls plotted on it |
-| 0:52 | The ledger: every order, its verdict, its three-way split, and a link to the transaction |
-| 1:10 | **The loop from the browser**: the request written, escrowed from a wallet, run, attested, and settled onchain — ending on the receipt and the hash |
-| 1:40 | **The transaction on Arc's explorer**: one settlement, three transfers inside it, confirmed in half a second |
-| 2:01 | **The build and the chain from a terminal**: the contract suite, the independent check against mainnet, and `cast chain-id` answering 5042 |
+| 0:15 | **The build, from Arc Studio**: the real session, through Circle's `arc-studio` CLI. The file Studio wrote is pulled back and diffed against the deployed source — one hunk, the divide-by-zero our independent Foundry suite found |
+| 0:38 | The live app on Arc mainnet. A real call to `api.frankfurter.dev` — the ECB's reference rate, a publisher this project does not run — measured at 196 ms and checked against the covenant's schema |
+| 0:57 | The settlement curve: what a given overrun costs, with the covenant's own settled calls plotted on it |
+| 1:14 | The ledger: every order, its verdict, its three-way split, and a link to the transaction |
+| 1:33 | **The loop from the browser**: the request written, escrowed from a wallet, run, attested, and settled onchain — ending on the receipt and the hash |
+| 2:02 | **The transaction on Arc's explorer**: one settlement, three transfers inside it, confirmed in half a second |
+| 2:23 | **The build and the chain from a terminal**: the contract suite, the independent check against mainnet, and `cast chain-id` answering 5042 |
 
 The narration is what the interface is doing, not what it might do: every figure on screen is read from the contract or measured during the take. It was recorded against a local instance of the deployed build — the same binary and the same front-end bundle, reading Arc mainnet — because the recorder drives the page itself.
 
@@ -278,7 +279,7 @@ Built for **Arc Microgrants: Built with Arc Studio** (Circle, October 2026).
 | Criterion | Weight | How this submission answers it |
 | --- | --- | --- |
 | Real USDC moving on Arc mainnet | 30% | **Eighteen settlements and nine permissionless reclaims**, across four wallets and six covenants, covering every outcome the contract can reach — thirteen passes, two linear rebates, three breaches refunded with a bond penalty, and nine expired orders returned to their callers. Each has a transaction hash and its exact amounts above. |
-| Use of Arc Studio across the build | 25% | The contract, its Foundry test suite and its README were written, iterated and tested inside Arc Studio — workspace [`studio.arc.io/app/b3658244-c47e-4bb9-b1c5-3b34acc595cc`](https://studio.arc.io/app/b3658244-c47e-4bb9-b1c5-3b34acc595cc). Mainnet deployment, the verifier and the app were then built around that artefact; a second Studio turn built the in-workspace frontend. |
+| Use of Arc Studio across the build | 25% | The contract, its Foundry test suite and its README were written, iterated and tested inside Arc Studio — workspace [`studio.arc.io/app/b3658244-c47e-4bb9-b1c5-3b34acc595cc`](https://studio.arc.io/app/b3658244-c47e-4bb9-b1c5-3b34acc595cc). The session is still live and inspectable with Circle's own CLI: `arc-studio sessions` names the app and thread, and pulling `contracts/src/` back gives the file Studio wrote — one hunk away from the deployed source, the divide-by-zero fix shown in the video. Mainnet deployment, the verifier and the app were then built around that artefact. |
 | A working product | 25% | [vericall.fly.dev](https://vericall.fly.dev) — the app and the verifier in one process, serving a proof ledger that reads Arc mainnet over three independent RPC endpoints and a workbench that runs real calls, draws the settlement curve and lets a wallet escrow, run and settle a call without leaving the page. Useful with no wallet at all; orders 23–25 above were each produced by that loop. |
 | Potential to go further | 20% | The covenant is a general instrument: metered SaaS billing, agent-to-agent task settlement, and dependency royalties are the same primitive with different terms. A path into the Circle Grant Program is sketched under *Roadmap*. |
 
