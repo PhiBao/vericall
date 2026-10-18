@@ -416,6 +416,28 @@ contract VeriCallClearinghouseTest is Test {
         assertEq(ch.getOrderCount(), ordersBefore, "a failed pull must not consume an order id");
     }
 
+    function test_createOrder_acceptsAnAllowanceForExactlyOneOrder() public {
+        // An approval sized to the call, not to the balance. The client grants
+        // exactly the escrow, so the pull has to work with a finite allowance
+        // and leave it consumed afterwards — a caller who approves 0.03 USDC
+        // should never be relying on the infinite one this suite happens to use.
+        address precise = address(0xCA11E4);
+        usdc.mint(precise, PRICE);
+        vm.prank(precise);
+        usdc.approve(address(ch), PRICE);
+
+        vm.prank(precise);
+        uint256 orderId = ch.createOrder(serviceId, keccak256("precise"), TTL);
+
+        VeriCallClearinghouse.CallOrder memory o = ch.getOrder(orderId);
+        assertEq(o.escrowedUsdc, PRICE);
+        assertEq(
+            usdc.allowance(precise, address(ch)),
+            0,
+            "an approval for one order is consumed by that order"
+        );
+    }
+
     function test_createOrder_requiresTheBondToCoverTheSlash() public {
         // A bond of one base unit cannot cover a 20% penalty on a 0.20 order.
         uint256 thin = _registerSolo("Thin", PRICE, 1);

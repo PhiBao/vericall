@@ -70,7 +70,8 @@ async function main() {
       const approveData = encodeFunctionData({
         abi: ERC20_ABI,
         functionName: "approve",
-        args: [deployment.contract, (1n << 256n) - 1n],
+        // The deposit, exactly — the same reason as the escrow approval.
+        args: [deployment.contract, amount],
       });
       const approved = await sendTransaction(net, provider, USDC_ADDRESS, approveData, { label: "approve USDC" });
       log(`\n  approve ${approved.status} · ${explorerTx(net, approved.hash)}`);

@@ -75,7 +75,7 @@ the same way a slow endpoint is.
 The contract, its Foundry test suite and its README were written, iterated and tested inside Arc
 Studio, at the project link above. The session shows the prompts, the generated Solidity, the
 compiler and test runs, and the workspace app. Studio's own build was then verified again from
-outside: a second, independent test suite (`contracts/test/VeriCallClearinghouse.t.sol`, 51 tests)
+outside: a second, independent test suite (`contracts/test/VeriCallClearinghouse.t.sol`, 52 tests)
 exercises the same artefact against the settlement arithmetic the product promises, and it found
 one real defect in the generated code — a covenant whose grace latency equals its hard timeout
 divided by zero and reverted every such call, which is now guarded and covered by a fuzz test.
@@ -111,12 +111,12 @@ signs are ordinary mainnet transactions, signed by one key, for one contract.
    step — request hash, measured latency, schema result, the exact quote, and the `settleOrder`
    payload it would sign. Nothing is simulated; the call really happens.
 3. Drag the **payoff curve** slider to see what any latency would cost.
-4. With a wallet and a few cents of USDC: **Start a call** writes a request, escrows it onchain,
-   runs it and settles it from the same page. That is the loop orders 23–25 came from, and the
+4. With a wallet and a few cents of USDC: **Start a call** writes a request, approves exactly that
+   escrow, escrows it onchain, runs it and settles it from the same page. That is the loop orders 23–25 came from, and the
    loop the video ends on.
 5. Run the independent checks:
    ```
-   node web/scripts/verify.ts --network arc-mainnet     # 41 checks, no key, no spending
+   node web/scripts/verify.ts --network arc-mainnet     # 43 checks today, no key, no spending
    cd web && pnpm test:wallet                           # 11 checks against a stubbed wallet
    cd web && pnpm wallet & pnpm test:settle-ui          # the whole loop, in a real browser
    ```

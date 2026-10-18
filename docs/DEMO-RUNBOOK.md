@@ -154,7 +154,7 @@ Switch to the **Arc Studio** tab:
 
 ## 3:50–4:20 — the parts that make it more than a demo
 
-- Terminal: `node web/scripts/verify.ts --network arc-mainnet` → **41 checks, all passed**, no key, no write endpoint.
+- Terminal: `node web/scripts/verify.ts --network arc-mainnet` → **43 checks, all passed**, no key, no write endpoint. The count grows with the chain.
   "That is a judge's check, not mine: bytecode, every covenant term against the chain, every settled
   order's payouts reproducible from the covenant's own rates, and the money whole."
 - Point at the **dependency wallet**: `0.004 → 0.268 USDC`. "It started with dust. That is 66×, earned

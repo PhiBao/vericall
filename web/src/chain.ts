@@ -600,7 +600,12 @@ export function useWallet(chain: Chain): WalletController {
           encodeFunctionData({
             abi: ALLOWANCE_ABI,
             functionName: "approve",
-            args: [args.contract, (1n << 256n) - 1n],
+            // Exactly the escrow, never an unlimited allowance. An approval is a
+            // standing permission, and a wallet that grants the contract
+            // 2^256-1 USDC has given it something the caller never intended to
+            // hand over: the escrow is the whole of what this call needs, and
+            // after it settles the allowance is zero.
+            args: [args.contract, args.price],
           }),
         );
         // The escrow must not race the approval: Arc finalises on inclusion, so

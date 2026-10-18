@@ -121,7 +121,8 @@ async function main() {
     const approveData = encodeFunctionData({
       abi: ERC20_ABI,
       functionName: "approve",
-      args: [deployment.contract, (1n << 256n) - 1n],
+      // The bonds this registration will deposit, no more.
+      args: [deployment.contract, BigInt(totalBondNeeded)],
     });
     const result = await sendTransaction(net, provider, USDC_ADDRESS, approveData, {
       label: "approve USDC for bonds",

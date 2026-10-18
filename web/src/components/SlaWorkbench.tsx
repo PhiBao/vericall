@@ -353,7 +353,10 @@ export function SlaWorkbench({ config, configError, ledger, wallet, onSettled, r
         setEscrowState({ kind: "failed", message: "the verifier has not reported a USDC address" });
         return;
       }
-      const price = BigInt(Math.round(Number(fixture.price_usdc) * 1_000_000));
+      // The price the contract will actually pull, read from its own record
+      // rather than from the display string: the allowance is granted for
+      // exactly this, so the covenant's number has to be the one approved.
+      const price = BigInt(covenantRecord.call_price_units);
       // The wallet grants the allowance if it needs one, then escrows. Both are
       // signed by the caller; the verifier never touches the money.
       const { orderHash } = await wallet.escrowCall({

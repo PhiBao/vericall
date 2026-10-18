@@ -36,7 +36,7 @@ The rebate is not a policy decision made by a human after the fact. It is arithm
 | 0:50 | The settlement curve: what a given overrun costs, with the covenant's own settled calls plotted on it |
 | 1:05 | The ledger: every order, its verdict, its three-way split, and a link to the transaction |
 | 1:25 | **The loop from the browser**: the request written, escrowed from a wallet, run, attested, and settled onchain — ending on the receipt and the hash |
-| 1:55 | `verify.ts`: 41 checks against the chain, no key, no spending |
+| 1:55 | `verify.ts`: every claim checked against the chain, no key, no spending |
 
 The narration is what the interface is doing, not what it might do: every figure on screen is read from the contract or measured during the take. It was recorded against a local instance of the deployed build — the same binary and the same front-end bundle, reading Arc mainnet — because the recorder drives the page itself.
 
@@ -109,9 +109,12 @@ published that day.
 These three were not settled by a script. Each was created, executed and settled
 from [vericall.fly.dev](https://vericall.fly.dev) by `0xDbFe…e349` — a fourth
 wallet that appears nowhere else in the build, funded for the purpose. The app
-writes the request, grants the USDC allowance the escrow needs, sends
-`createOrder` from the connected wallet, waits for Arc to show the order, runs
-the call through the verifier, and sends the settlement the verifier signed.
+writes the request, reads the covenant's own price from the chain, approves
+**exactly that much USDC** — never an unlimited allowance — sends `createOrder`
+from the connected wallet, waits for Arc to show the order, runs the call through
+the verifier, and sends the settlement the verifier signed. Because the approval
+is for one call, each new call asks for it again: two signatures per call, and
+nothing standing once it is spent.
 Order 25 is the settlement on camera in the walkthrough video.
 
 What this proves, and what it does not: the wallet is ours and so is the money,
@@ -162,13 +165,13 @@ inside the contract is the 0.4075 staked across the six active covenants.
 node scripts/verify.ts --network arc-mainnet
 ```
 
-41 checks, no wallet, no key, no spending — and no endpoint that could spend: the
+43 checks, no wallet, no key, no spending — and no endpoint that could spend: the
 checker asks for the public read endpoint and never for a write one. It verifies
 that the bytecode exists at the recorded address, that each covenant matches the
 chain term-for-term including the split table and the schema commitment, that each
 settled order's recorded payouts are reproducible from the covenant's own rates,
 and that the contract's balance is never less than the escrow and bonds it owes.
-It grows with the chain: every settled order adds a check. The same script passes
+The count grows with the chain — every settled order adds a check — so it reads as a lower bound rather than a fact about the script. The same script passes
 on Arc testnet.
 
 The project also carries a live check the app performs on every read: `totalEscrowed()` must equal the sum of funded orders' escrow. When a settlement is in flight the two disagree for as long as it takes Arc to include the next block — under a second.
@@ -297,7 +300,7 @@ All three of the microgrant's suggested directions are one product here: **softw
 cd contracts
 forge install foundry-rs/forge-std@v1.9.7 --no-git
 forge build
-forge test -vv            # 51 tests
+forge test -vv            # 52 tests
 forge test --gas-report   # settleOrder ≈ 150k gas
 ```
 
@@ -376,7 +379,7 @@ claiming anything.
 `tools/demo-wallet.ts` is what makes that possible without a wallet extension in
 the way: a loopback EIP-1193 provider that answers account and chain questions
 itself, proxies reads to Arc, and signs `eth_sendTransaction` for two things only
-— calls to the clearinghouse, and USDC `approve`. It refuses every other target
+— calls to the clearinghouse, and USDC `approve` for the exact escrow. It refuses every other target
 and every other USDC call, so a stray request cannot move funds elsewhere, and it
 listens on loopback only. It is a recording and testing harness, not part of the
 product.
