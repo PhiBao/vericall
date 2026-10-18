@@ -59,7 +59,7 @@ refusal and the covenant refunds the caller out of the provider's stake.
 | **Pass on a third party's API** (`fx-rate`, ECB via Frankfurter) | 61 ms measured, 0.021 to the provider, 0.009 to its dependency — a call to a publisher this project does not control | [`0x5cccd30b…`](https://explorer.arc.io/tx/0x5cccd30b9bb91ded0d6d6cd462e7ecf9933c40be40a229855003c291b53d6388) |
 | **Pass, escrowed and settled from the app itself** (`fx-rate`) | 146 ms measured, 0.021 to the provider, 0.009 to its dependency — the whole loop in the browser, from a wallet that had never touched the contract. Orders 23 and 24 are two more of the same, at 166 ms and 156 ms | [`0x718bef04…`](https://explorer.arc.io/tx/0x718bef04f9f35d6145c546d67ddb8ecce8c48ad046e92012e320221017acf7e8) |
 
-Sixteen settlements and nine permissionless reclaims in total, across four wallets
+Eighteen settlements and nine permissionless reclaims in total, across four wallets
 and six covenants — three deterministic services, two model-backed ones and one
 that belongs to somebody else — with different prices, rates and splits.
 `README.md` lists them with the exact amounts.

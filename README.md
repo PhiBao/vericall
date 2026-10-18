@@ -127,12 +127,12 @@ the contract: no allowance, no state, no scripts, one browser.
 | Wallet | Role | Started with | Holds now | What moved |
 | --- | --- | --- | --- | --- |
 | [`0x4AB5…e555`](https://explorer.arc.io/address/0x4AB5e7F2b5464B9494b49EFE41C2f00e7bcfE555) | caller | 1.300 USDC | 0.074 USDC | Paid for every order it opened and their gas; received two rebates and three breach refunds in full; moved 0.150 to the fourth wallet used in the video, so this column is not a profit and loss |
-| [`0x15AB…ac4b`](https://explorer.arc.io/address/0x15AB8109378736FA1C1C401175d375DB9b1dAC4B) | provider | 0.300 USDC | 0.607 USDC | Revenue from sixteen settled calls, less the 0.4075 it has staked behind six covenants and the penalties three breaches cost it |
-| [`0x0382…1e67`](https://explorer.arc.io/address/0x0382bca3Fc934169a43c7ebe1Ee4B4d6A69C1e67) | upstream dependency | 0.004 USDC | 0.268 USDC | **66×**, earned entirely as per-call royalty splits — it has no other source of income |
-| [`0xDbFe…e349`](https://explorer.arc.io/address/0xDbFe5c4d0256D2459bB216caB905999Ca41bE349) | the interface's own wallet | 0.350 USDC | 0.092 USDC | Funded once by the operator. Bought six calls entirely through the browser and paid their gas; four orders left mid-test were reclaimed after their windows closed |
+| [`0x15AB…ac4b`](https://explorer.arc.io/address/0x15AB8109378736FA1C1C401175d375DB9b1dAC4B) | provider | 0.300 USDC | 0.649 USDC | Revenue from eighteen settled calls, less the 0.4075 it has staked behind six covenants and the penalties three breaches cost it |
+| [`0x0382…1e67`](https://explorer.arc.io/address/0x0382bca3Fc934169a43c7ebe1Ee4B4d6A69C1e67) | upstream dependency | 0.004 USDC | 0.286 USDC | **71×**, earned entirely as per-call royalty splits — it has no other source of income |
+| [`0xDbFe…e349`](https://explorer.arc.io/address/0xDbFe5c4d0256D2459bB216caB905999Ca41bE349) | the interface's own wallet | 0.350 USDC | 0.012 USDC | Funded once by the operator. Bought eight calls entirely through the browser and paid their gas; four orders left mid-test were reclaimed after their windows closed. It is nearly empty, which is the honest state of a demo wallet that has been used |
 
 The dependency's row is the product thesis in one line. It started with dust and
-holds 0.268 USDC now, because every successful call that used it paid it 20%, 25%
+holds 0.286 USDC now, because every successful call that used it paid it 20%, 25%
 or 30% of the price in the same transaction that paid the provider — no invoice,
 no monthly reconciliation, no custodian. Paying a contributor a 0.03 USDC share of
 a 0.15 USDC call is impossible on card rails and uneconomic on most chains; here it
@@ -276,7 +276,7 @@ Built for **Arc Microgrants: Built with Arc Studio** (Circle, October 2026).
 
 | Criterion | Weight | How this submission answers it |
 | --- | --- | --- |
-| Real USDC moving on Arc mainnet | 30% | **Sixteen settlements and nine permissionless reclaims**, across four wallets and six covenants, covering every outcome the contract can reach — eleven passes, two linear rebates, three breaches refunded with a bond penalty, and nine expired orders returned to their callers. Each has a transaction hash and its exact amounts above. |
+| Real USDC moving on Arc mainnet | 30% | **Eighteen settlements and nine permissionless reclaims**, across four wallets and six covenants, covering every outcome the contract can reach — thirteen passes, two linear rebates, three breaches refunded with a bond penalty, and nine expired orders returned to their callers. Each has a transaction hash and its exact amounts above. |
 | Use of Arc Studio across the build | 25% | The contract, its Foundry test suite and its README were written, iterated and tested inside Arc Studio — workspace [`studio.arc.io/app/b3658244-c47e-4bb9-b1c5-3b34acc595cc`](https://studio.arc.io/app/b3658244-c47e-4bb9-b1c5-3b34acc595cc). Mainnet deployment, the verifier and the app were then built around that artefact; a second Studio turn built the in-workspace frontend. |
 | A working product | 25% | [vericall.fly.dev](https://vericall.fly.dev) — the app and the verifier in one process, serving a proof ledger that reads Arc mainnet over three independent RPC endpoints and a workbench that runs real calls, draws the settlement curve and lets a wallet escrow, run and settle a call without leaving the page. Useful with no wallet at all; orders 23–25 above were each produced by that loop. |
 | Potential to go further | 20% | The covenant is a general instrument: metered SaaS billing, agent-to-agent task settlement, and dependency royalties are the same primitive with different terms. A path into the Circle Grant Program is sketched under *Roadmap*. |

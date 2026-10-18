@@ -47,7 +47,7 @@ No slides. Say it over the live page.
 
 Open **vericall.fly.dev**. Point at the strip under the headline before saying anything else:
 
-> "Sixteen settled calls, every outcome the contract can reach, 1.93 USDC
+> "Eighteen settled calls, every outcome the contract can reach, 2.05 USDC
 > through the contract, 0.4075 staked against promises, and the invariant that catches an
 > accounting bug in either implementation. Every one of those numbers comes from the
 > contract's own storage, and each links to the transaction behind it."
