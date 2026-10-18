@@ -524,6 +524,7 @@ Guards against the first two are in *Roadmap*; the third is bounded by design an
 | --- | --- |
 | [`docs/assets/vericall-demo.mp4`](docs/assets/vericall-demo.mp4) | The two-minute walkthrough: the live app, a real third-party call, the settlement curve, the ledger, a call escrowed and settled from the browser, and the independent check |
 | [`docs/SUBMISSION.md`](docs/SUBMISSION.md) | The links, the transactions and the honest real-versus-simulated split, in submission order |
+| [`docs/OUTREACH.md`](docs/OUTREACH.md) | What it would take to get the first user who is not us — the one number this submission cannot claim |
 | [`docs/DEMO-RUNBOOK.md`](docs/DEMO-RUNBOOK.md) | The shot list and narration behind the video, so it can be re-recorded after a change |
 | `docs/assets/` | The two diagrams above, as SVG |
 
