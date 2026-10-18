@@ -71,8 +71,9 @@ Still without connecting anything:
 - Point at the **invariant** line: `sum(funded escrow) = totalEscrowed()`.
 - Point at the **settled orders** table and read one row aloud:
   "Order 2 measured **1250 milliseconds**. The covenant's grace is 500 and its hard timeout is 2000,
-  so it ran exactly half-way into the rebate band and the caller got **0.04 USDC** back — that is not
-  approximately 3.5 cents, it is the consequence of that one millisecond."
+  so it landed exactly half-way into the rebate band and the caller got **0.04 USDC** back — not
+  approximately four cents, but exactly half the covenant's 40% maximum, because 1250 is exactly
+  halfway."
 - Click the transaction link on row 2. On the explorer: show the USDC transfers — one out to the
   provider, one to the dependency, one back to the caller. "Three transfers, one transaction."
 - Scroll to **Published covenants** and point at the **bond** column: `needs 0.040000`.
