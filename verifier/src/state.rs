@@ -20,6 +20,10 @@ use serde::Serialize;
 pub const MAX_SERVICES: u64 = 24;
 pub const MAX_ORDERS: u64 = 60;
 
+/// How many chain reads are in flight at once. Each read already races three
+/// endpoints, so this is the number of *logical* reads, not HTTP requests.
+pub const READ_CONCURRENCY: usize = 8;
+
 /// Arc's public RPCs reject an `eth_getLogs` span of 10,000 blocks or more, so
 /// every scan is chunked below that. The same limit is why the ledger reads
 /// state through view functions and only reaches for logs to find transaction
@@ -149,6 +153,7 @@ pub struct LedgerView {
 pub async fn read_ledger(
     cfg: &Config,
     eth: &HttpEth,
+    index: &LogIndex,
     caller_roles: &[(String, &'static str)],
 ) -> Result<LedgerView, ChainError> {
     let chain = read_chain_status(cfg, eth).await?;
@@ -175,66 +180,84 @@ pub async fn read_ledger(
     let code = eth.code_at(&contract_hex).await?;
     let contract_code_present = code.value != "0x" && !code.value.is_empty();
 
-    let service_count = read_uint_view(eth, &contract_hex, |_c| {
-        let call = abi::VeriCallClearinghouse::getServiceCountCall {};
-        alloy_sol_types::SolCall::abi_encode(&call)
-    })
-    .await?;
-    let order_count = read_uint_view(eth, &contract_hex, |_c| {
-        let call = abi::VeriCallClearinghouse::getOrderCountCall {};
-        alloy_sol_types::SolCall::abi_encode(&call)
-    })
-    .await?;
-    let total_escrowed = read_uint_view(eth, &contract_hex, |_c| {
-        let call = abi::VeriCallClearinghouse::totalEscrowedCall {};
-        alloy_sol_types::SolCall::abi_encode(&call)
-    })
-    .await?;
-    let total_bond = read_uint_view(eth, &contract_hex, |_c| {
-        let call = abi::VeriCallClearinghouse::totalBondCall {};
-        alloy_sol_types::SolCall::abi_encode(&call)
-    })
-    .await?;
+    // Independent reads go out together; serially they were four round trips
+    // before the first covenant was even asked for.
+    let (service_count, order_count, total_escrowed, total_bond) = tokio::try_join!(
+        read_uint_view(eth, &contract_hex, |_c| {
+            let call = abi::VeriCallClearinghouse::getServiceCountCall {};
+            alloy_sol_types::SolCall::abi_encode(&call)
+        }),
+        read_uint_view(eth, &contract_hex, |_c| {
+            let call = abi::VeriCallClearinghouse::getOrderCountCall {};
+            alloy_sol_types::SolCall::abi_encode(&call)
+        }),
+        read_uint_view(eth, &contract_hex, |_c| {
+            let call = abi::VeriCallClearinghouse::totalEscrowedCall {};
+            alloy_sol_types::SolCall::abi_encode(&call)
+        }),
+        read_uint_view(eth, &contract_hex, |_c| {
+            let call = abi::VeriCallClearinghouse::totalBondCall {};
+            alloy_sol_types::SolCall::abi_encode(&call)
+        }),
+    )?;
 
     let service_total = service_count.value.min(U256::from(MAX_SERVICES)).to::<u64>();
     let order_total = order_count.value.min(U256::from(MAX_ORDERS)).to::<u64>();
 
-    let mut services = Vec::with_capacity(service_total as usize);
+    // Read every covenant and order concurrently. Serially this is ~30 RPC calls
+    // and takes the better part of a minute on Arc's public endpoints; the bound
+    // keeps the burst polite.
+    let permits = std::sync::Arc::new(tokio::sync::Semaphore::new(READ_CONCURRENCY));
+    let mut service_tasks = tokio::task::JoinSet::new();
     for id in 1..=service_total {
-        match read_service(eth, &contract_hex, id).await {
-            Ok(view) => services.push(view),
-            // A missing covenant is a real gap in the ledger, not something to
-            // paper over: report it and keep going.
-            Err(err) => {
-                tracing::warn!("service {id} could not be read: {err}");
-            }
+        let eth = eth.clone();
+        let contract = contract_hex.clone();
+        let permit = permits.clone();
+        service_tasks.spawn(async move {
+            let _held = permit.acquire_owned().await;
+            (id, read_service(&eth, &contract, id).await)
+        });
+    }
+    let mut services: Vec<ServiceView> = Vec::with_capacity(service_total as usize);
+    while let Some(joined) = service_tasks.join_next().await {
+        match joined {
+            Ok((id, Ok(view))) => services.push(view),
+            Ok((id, Err(err))) => tracing::warn!("service {id} could not be read: {err}"),
+            Err(err) => tracing::warn!("a service read panicked: {err}"),
         }
     }
+    services.sort_by_key(|service| service.id.parse::<u64>().unwrap_or(0));
 
     // Transaction hashes are the one fact not in storage, and they are what a
-    // reader clicks. Scanning from the deploy block keeps this cheap: the chain
-    // is only a few thousand blocks past it, so it is one chunk, not a walk.
-    let txs = match cfg.deploy_block {
-        Some(from_block) => match scan_order_txs(eth, &contract_hex, from_block).await {
-            Ok(map) => map,
-            Err(err) => {
-                tracing::warn!("could not scan settlement events: {err}");
-                std::collections::BTreeMap::new()
-            }
-        },
-        None => std::collections::BTreeMap::new(),
-    };
+    // reader clicks. They come from a background index; if it has not caught up
+    // yet the ledger is still served, with the links absent rather than invented.
+    if let Some(from_block) = cfg.deploy_block {
+        index.refresh(eth.clone(), contract_hex.clone(), from_block);
+    }
+    let txs = index.snapshot();
 
-    let mut orders = Vec::with_capacity(order_total as usize);
+    let mut order_tasks = tokio::task::JoinSet::new();
     for id in 1..=order_total {
-        match read_order(eth, &contract_hex, id).await {
-            Ok(mut view) => {
+        let eth = eth.clone();
+        let contract = contract_hex.clone();
+        let permit = permits.clone();
+        order_tasks.spawn(async move {
+            let _held = permit.acquire_owned().await;
+            (id, read_order(&eth, &contract, id).await)
+        });
+    }
+    let mut orders: Vec<OrderView> = Vec::with_capacity(order_total as usize);
+    while let Some(joined) = order_tasks.join_next().await {
+        match joined {
+            Ok((id, Ok(mut view))) => {
                 view.txs = txs.get(&id).cloned().unwrap_or_default();
                 orders.push(view)
             }
-            Err(err) => tracing::warn!("order {id} could not be read: {err}"),
+            Ok((id, Err(err))) => tracing::warn!("order {id} could not be read: {err}"),
+            Err(err) => tracing::warn!("an order read panicked: {err}"),
         }
     }
+    orders.sort_by_key(|order| order.id.parse::<u64>().unwrap_or(0));
 
     let funded_escrow: U256 = orders
         .iter()
@@ -243,10 +266,15 @@ pub async fn read_ledger(
         .fold(U256::ZERO, |acc, v| acc + v);
 
     let invariant_ok = funded_escrow == total_escrowed.value;
-    let invariant_note = if invariant_ok {
+    let open_count = orders.iter().filter(|o| o.status == STATUS_FUNDED).count();
+    let invariant_note = if invariant_ok && open_count == 0 {
         format!(
-            "{} funded order(s) hold {} USDC, which is exactly totalEscrowed()",
-            orders.iter().filter(|o| o.status == STATUS_FUNDED).count(),
+            "No escrow in flight: all {} orders are settled, and totalEscrowed() is zero with them",
+            orders.len()
+        )
+    } else if invariant_ok {
+        format!(
+            "{open_count} funded order(s) hold {} USDC, which is exactly totalEscrowed()",
             abi::format_usdc(total_escrowed.value)
         )
     } else {
@@ -290,7 +318,7 @@ async fn read_balances(
     eth: &HttpEth,
     roles: &[(String, &'static str)],
 ) -> Result<Vec<BalanceView>, ChainError> {
-    let mut out = Vec::with_capacity(roles.len());
+    let mut tasks = tokio::task::JoinSet::new();
     for (address, role) in roles {
         let parsed = match crate::chain::parse_address(address) {
             Ok(a) => a,
@@ -299,9 +327,21 @@ async fn read_balances(
                 continue;
             }
         };
-        let native_fut = eth.native_balance(address);
-        let erc20_fut = eth.erc20_balance_of(eth_usdc(), parsed);
-        let (native, erc20) = tokio::join!(native_fut, erc20_fut);
+        let eth = eth.clone();
+        let address = address.clone();
+        let role: &'static str = role;
+        tasks.spawn(async move {
+            let (native, erc20) = tokio::join!(
+                eth.native_balance(&address),
+                eth.erc20_balance_of(eth_usdc(), parsed)
+            );
+            (address, role, native, erc20)
+        });
+    }
+
+    let mut out = Vec::with_capacity(roles.len());
+    while let Some(joined) = tasks.join_next().await {
+        let Ok((address, role, native, erc20)) = joined else { continue };
         let native_value = match native {
             Ok(v) => v.value,
             Err(err) => {
@@ -325,6 +365,13 @@ async fn read_balances(
             role,
         });
     }
+    let rank = |role: &str| match role {
+        "caller" => 0,
+        "provider" => 1,
+        "dependency" => 2,
+        _ => 3,
+    };
+    out.sort_by_key(|balance| rank(balance.role));
     Ok(out)
 }
 
@@ -399,17 +446,10 @@ pub async fn read_service(eth: &HttpEth, contract: &str, id: u64) -> Result<Serv
         message: e,
     })?;
 
-    let splits_call = abi::VeriCallClearinghouse::getSplitsCall {
-        serviceId: U256::from(id),
-    };
-    let splits_raw = eth
-        .eth_call(contract, &alloy_sol_types::SolCall::abi_encode(&splits_call))
-        .await?;
-    let splits = decode_splits(&splits_raw.value).map_err(|e| ChainError::Decode {
-        endpoint: splits_raw.endpoint.clone(),
-        method: "getSplits".into(),
-        message: e,
-    })?;
+    // `getService` already returns the covenant's split table, so the separate
+    // `getSplits` call would double the RPC cost of reading this ledger for a
+    // value already in hand.
+    let splits = service.splits.clone();
 
     let provider_hex = format!("0x{}", hex::encode(service.provider));
     let required_bond = div_ceil_u256(
@@ -504,18 +544,127 @@ async fn read_order(eth: &HttpEth, contract: &str, id: u64) -> Result<OrderView,
     })
 }
 
-/// Find the transactions behind each order by scanning the contract's events.
+/// An incremental index of where each order's transactions are.
 ///
-/// Chunked, because Arc's public RPCs refuse a span of 10,000 blocks; the topics
-/// are the contract's own event signatures, so a decode failure means the
-/// deployment is not the contract we think it is.
+/// The chain only grows, so the scan is resumed from the last block it covered
+/// rather than repeated. On a young chain that matters: the deploy block was
+/// 365,000 blocks behind when this was written, and re-walking it on every page
+/// read took the better part of a minute.
+///
+/// Refreshes happen in the background. A reader never waits for a log scan: the
+/// ledger is the important read, and a transaction link is a convenience that can
+/// arrive a few seconds later. A row with no link yet says so rather than
+/// pretending the transaction does not exist.
+#[derive(Clone)]
+pub struct LogIndex {
+    inner: std::sync::Arc<std::sync::Mutex<LogIndexState>>,
+}
+
+#[derive(Default)]
+struct LogIndexState {
+    /// The last block the scan has covered. Zero means nothing yet.
+    scanned_to: u64,
+    entries: std::collections::BTreeMap<u64, OrderTxs>,
+    scanning: bool,
+    last_error: Option<String>,
+    last_started: Option<std::time::Instant>,
+}
+
+impl LogIndex {
+    pub fn new() -> Self {
+        Self {
+            inner: std::sync::Arc::new(std::sync::Mutex::new(LogIndexState::default())),
+        }
+    }
+
+    /// What is known right now. Never blocks on the chain.
+    pub fn snapshot(&self) -> std::collections::BTreeMap<u64, OrderTxs> {
+        self.inner.lock().expect("log index lock").entries.clone()
+    }
+
+    /// Whether a background refresh is running, for the health endpoint.
+    pub fn is_scanning(&self) -> bool {
+        self.inner.lock().expect("log index lock").scanning
+    }
+
+    /// Start a refresh unless one is running or the last one started recently.
+    pub fn refresh(&self, eth: HttpEth, contract: String, from_block: u64) {
+        {
+            let mut state = self.inner.lock().expect("log index lock");
+            if state.scanning {
+                return;
+            }
+            if let Some(started) = state.last_started {
+                if started.elapsed() < std::time::Duration::from_secs(30) && state.scanned_to > 0 {
+                    return;
+                }
+            }
+            state.scanning = true;
+            state.last_started = Some(std::time::Instant::now());
+        }
+
+        let index = self.clone();
+        tokio::spawn(async move {
+            let start = {
+                let state = index.inner.lock().expect("log index lock");
+                if state.scanned_to == 0 {
+                    from_block
+                } else {
+                    state.scanned_to + 1
+                }
+            };
+            let result = scan_order_txs(&eth, &contract, start).await;
+            let mut state = index.inner.lock().expect("log index lock");
+            state.scanning = false;
+            match result {
+                Ok((entries, scanned_to)) => {
+                    for (order, txs) in entries {
+                        let slot = state.entries.entry(order).or_default();
+                        if txs.created.is_some() {
+                            slot.created = txs.created;
+                        }
+                        if txs.settled.is_some() {
+                            slot.settled = txs.settled;
+                        }
+                        if txs.reclaimed.is_some() {
+                            slot.reclaimed = txs.reclaimed;
+                        }
+                        if txs.block_number.is_some() {
+                            slot.block_number = txs.block_number;
+                        }
+                    }
+                    state.scanned_to = scanned_to.max(state.scanned_to);
+                    state.last_error = None;
+                    tracing::info!(
+                        orders = state.entries.len(),
+                        scanned_to = state.scanned_to,
+                        "settlement transaction index updated"
+                    );
+                }
+                Err(err) => {
+                    state.last_error = Some(err.to_string());
+                    tracing::warn!("settlement transaction scan failed: {err}");
+                }
+            }
+        });
+    }
+}
+
+/// Scan from `from_block` to the head and return what was found, plus the last
+/// block covered.
+///
+/// The three event signatures are requested as one OR filter per chunk, so a
+/// chunk costs one request rather than three.
 pub async fn scan_order_txs(
     eth: &HttpEth,
     contract: &str,
     from_block: u64,
-) -> Result<std::collections::BTreeMap<u64, OrderTxs>, ChainError> {
+) -> Result<(std::collections::BTreeMap<u64, OrderTxs>, u64), ChainError> {
     let latest = eth.block_number().await?.value;
     let mut out: std::collections::BTreeMap<u64, OrderTxs> = std::collections::BTreeMap::new();
+    if from_block > latest {
+        return Ok((out, latest));
+    }
 
     const ORDER_CREATED: &str = "OrderCreated(uint256,uint256,address)";
     const ORDER_SETTLED: &str = "OrderSettled(uint256,uint8,uint32,bool,bytes32,uint256,uint256,uint256,uint256)";
@@ -528,45 +677,42 @@ pub async fn scan_order_txs(
     let mut start = from_block;
     while start <= latest {
         let end = (start + MAX_LOG_SPAN - 1).min(latest);
-        for (topic, kind) in [
-            (&created_topic, "created"),
-            (&settled_topic, "settled"),
-            (&reclaimed_topic, "reclaimed"),
-        ] {
-            let logs = match eth.logs(contract, start, end, vec![serde_json::json!(topic)]).await {
-                Ok(logs) => logs.value,
-                Err(err) => {
-                    // A failed chunk is a gap in the links, not a reason to
-                    // withhold the ledger. Record it and keep going.
-                    tracing::warn!("log scan {start}..={end} for {kind} failed: {err}");
-                    continue;
-                }
+        let logs = eth
+            .logs(
+                contract,
+                start,
+                end,
+                vec![serde_json::json!([created_topic, settled_topic, reclaimed_topic])],
+            )
+            .await
+            .map_err(|err| {
+                tracing::warn!("log scan {start}..={end} failed: {err}");
+                err
+            })?;
+
+        for log in logs.value {
+            let Some(topic) = log.topics.first() else { continue };
+            let Some(order_topic) = log.topics.get(1) else { continue };
+            let Ok(order_id) = u64::from_str_radix(order_topic.trim_start_matches("0x"), 16) else {
+                continue;
             };
-            for log in logs {
-                let Some(order_topic) = log.topics.get(1) else { continue };
-                let Ok(order_id) = u64::from_str_radix(order_topic.trim_start_matches("0x"), 16) else {
-                    continue;
-                };
-                let Ok(block) = u64::from_str_radix(log.block_number.trim_start_matches("0x"), 16) else {
-                    continue;
-                };
-                let entry = out.entry(order_id).or_default();
-                match kind {
-                    "created" => entry.created = Some(log.transaction_hash.clone()),
-                    "settled" => {
-                        entry.settled = Some(log.transaction_hash.clone());
-                        entry.block_number = Some(block);
-                    }
-                    _ => {
-                        entry.reclaimed = Some(log.transaction_hash.clone());
-                        entry.block_number = Some(block);
-                    }
-                }
+            let Ok(block) = u64::from_str_radix(log.block_number.trim_start_matches("0x"), 16) else {
+                continue;
+            };
+            let entry = out.entry(order_id).or_default();
+            if topic.eq_ignore_ascii_case(&settled_topic) {
+                entry.settled = Some(log.transaction_hash.clone());
+                entry.block_number = Some(block);
+            } else if topic.eq_ignore_ascii_case(&reclaimed_topic) {
+                entry.reclaimed = Some(log.transaction_hash.clone());
+                entry.block_number = Some(block);
+            } else if topic.eq_ignore_ascii_case(&created_topic) {
+                entry.created = Some(log.transaction_hash.clone());
             }
         }
         start = end + 1;
     }
-    Ok(out)
+    Ok((out, latest))
 }
 
 /// Read `version()` as a liveness probe that the contract is the one we expect.

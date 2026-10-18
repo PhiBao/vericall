@@ -25,7 +25,7 @@ import {
   type CovenantFile,
   type CovenantRecord,
 } from "./lib/files.ts";
-import { fixture, fixtures, formatUsdc, parseBondOverrides, parseUsdc, schemaHash } from "./lib/fixtures.ts";
+import { fixture, fixtures, formatUsdc, parseBondOverrides, parseUsdc, resolveEndpoint, schemaHash } from "./lib/fixtures.ts";
 import { explorerTx, network, reader, sendTransaction, signerFromEnv } from "./lib/chain.ts";
 import { CLEARINGHOUSE_ABI, USDC_ADDRESS, ERC20_ABI } from "./lib/abi.ts";
 import { encodeFunctionData } from "viem";
@@ -173,7 +173,7 @@ async function main() {
         provider.address,
         verifierAddress,
         terms.name,
-        `${process.env.VERICALL_PUBLIC_BASE_URL ?? "http://localhost:8787"}${terms.path}`,
+        resolveEndpoint(terms, process.env.VERICALL_PUBLIC_BASE_URL ?? "http://localhost:8787"),
         schemaCommitment,
         price,
         terms.graceLatencyMs,
@@ -212,7 +212,7 @@ async function main() {
       verifier: verifierAddress,
       dependency: dependencyAddress,
       name: terms.name,
-      endpointUri: `${process.env.VERICALL_PUBLIC_BASE_URL ?? "http://localhost:8787"}${terms.path}`,
+      endpointUri: resolveEndpoint(terms, process.env.VERICALL_PUBLIC_BASE_URL ?? "http://localhost:8787"),
       schemaHash: schemaCommitment,
       callPriceUsdc: terms.priceUsdc,
       graceLatencyMs: terms.graceLatencyMs,

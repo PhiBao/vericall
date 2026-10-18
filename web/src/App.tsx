@@ -4,7 +4,7 @@ import { useChain, useWallet } from "./chain";
 import type { Health, LedgerView, PublicConfig } from "./types";
 import type { ChainFacts } from "./components/Masthead";
 import { Masthead } from "./components/Masthead";
-import { Orientation } from "./components/Orientation";
+import { Hero } from "./components/Hero";
 import { SlaWorkbench } from "./components/SlaWorkbench";
 import { ProofLedger } from "./components/ProofLedger";
 import { OrdersTable } from "./components/OrdersTable";
@@ -88,6 +88,18 @@ export function App() {
   const chain = useChain(config);
   const wallet = useWallet(chain);
 
+  /**
+   * A request to run a call, raised by the hero.
+   *
+   * A counter rather than a boolean: pressing the hero button twice should run
+   * twice, and a boolean would need resetting from three components away.
+   */
+  const [runSignal, setRunSignal] = useState(0);
+  const requestRun = useCallback((): void => {
+    setRunSignal((n) => n + 1);
+    document.getElementById("run")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
+
   const chainFacts = useMemo<ChainFacts>(() => {
     const status = ledger?.chain ?? health?.chain ?? null;
     return {
@@ -105,10 +117,7 @@ export function App() {
   return (
     <div className="shell">
       <Masthead chain={chainFacts} loading={ledger === null && ledgerError === null} wallet={wallet} />
-      <Orientation
-        contract={ledger?.contract ?? config?.contract ?? null}
-        explorer={ledger?.explorer ?? config?.explorer ?? null}
-      />
+      <Hero ledger={ledger} onRun={requestRun} />
       <main className="grid grid--workbench">
         <SlaWorkbench
           config={config}
@@ -116,6 +125,7 @@ export function App() {
           ledger={ledger}
           wallet={wallet}
           onSettled={refreshLedger}
+          runSignal={runSignal}
         />
         <ProofLedger
           ledger={ledger}

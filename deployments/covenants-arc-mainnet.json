@@ -101,6 +101,25 @@
       "initialBondUsdc": "0.03",
       "registeredAt": "2026-10-16T14:03:47.827Z",
       "txHash": "0x402705cc284378c03aa066a5f6a5e1c9f80a21f5449aabf3dcc99dc6553b8e79"
+    },
+    {
+      "slug": "fx-rate",
+      "serviceId": 9,
+      "provider": "0x15AB8109378736FA1C1C401175d375DB9b1dAC4B",
+      "verifier": "0x0382bca3Fc934169a43c7ebe1Ee4B4d6A69C1e67",
+      "dependency": "0x0382bca3Fc934169a43c7ebe1Ee4B4d6A69C1e67",
+      "name": "ECB Reference Rate",
+      "endpointUri": "https://api.frankfurter.dev/v1/latest?base=USD&symbols=EUR",
+      "schemaHash": "0x776ee7709aaeb4ead7d534e461e22a9e1c33aa4c17358881802068c192bfa812",
+      "callPriceUsdc": "0.03",
+      "graceLatencyMs": 800,
+      "hardTimeoutMs": 2500,
+      "maxRebateBps": 5000,
+      "slashPenaltyBps": 2500,
+      "providerBps": 7000,
+      "initialBondUsdc": "0.01",
+      "registeredAt": "2026-10-18T16:12:41.860Z",
+      "txHash": "0xd601cc1f3d8331b70fc148b7d5d7b59a2ae94dfaa5a5dad1396c185cb9bc3220"
     }
   ]
 }

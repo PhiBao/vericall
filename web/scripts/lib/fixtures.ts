@@ -25,6 +25,10 @@ export interface CovenantFixture {
   summary: string;
   /** The service's path, relative to the verifier's public base URL. */
   path: string;
+  /** An absolute endpoint, when the service is somebody else's API. */
+  endpoint?: string;
+  /** `GET` or `POST`; defaults to POST. */
+  method?: string;
   /** `deterministic` or `jev` — what actually produces the response. */
   backedBy: string;
   /** One sentence on what is behind the endpoint. */
@@ -69,6 +73,18 @@ export function fixture(slug: string): CovenantFixture {
 /** Shown in the UI and the README: what is actually behind each endpoint. */
 export function isModelBacked(f: CovenantFixture): boolean {
   return f.backedBy === "jev";
+}
+
+/**
+ * The URL a covenant for this service must name.
+ *
+ * A third-party service names its own absolute endpoint; a service this
+ * verifier serves is addressed under its public base URL. Getting this wrong is
+ * the difference between buying a real API and buying a localhost fixture, and
+ * the verifier refuses to attest unless the URL it calls is the one committed.
+ */
+export function resolveEndpoint(f: CovenantFixture, baseUrl: string): string {
+  return f.endpoint ?? `${baseUrl.replace(/\/$/, "")}${f.path}`;
 }
 
 /**

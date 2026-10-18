@@ -26,7 +26,7 @@ export function ProofLedger({ ledger, error, refreshing, onRefresh }: ProofLedge
     <section className="panel" aria-labelledby="ledger-heading">
       <div className="panel__head">
         <h2 className="panel__title" id="ledger-heading">
-          Proof ledger
+          What the chain did
         </h2>
         <div className="row">
           {ledger ? (
@@ -120,7 +120,7 @@ export function ProofLedger({ ledger, error, refreshing, onRefresh }: ProofLedge
                 )}
               </div>
               <div>
-                <div className="fact__label">Total escrowed</div>
+                <div className="fact__label">Escrow in flight</div>
                 <div className="fact__value">{usdcFixed(ledger.total_escrowed_usdc)}</div>
               </div>
               <div>

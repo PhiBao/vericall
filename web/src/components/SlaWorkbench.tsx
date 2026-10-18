@@ -13,7 +13,7 @@ import type {
   PublicConfig,
   QuoteResponse,
 } from "../types";
-import { formatBps, formatDuration } from "../types";
+import { formatBps, formatDuration, verdictOfStatus } from "../types";
 import { txLink } from "../format";
 import { ExecutePanel } from "./ExecutePanel";
 import { PayoffCurve } from "./PayoffCurve";
@@ -36,6 +36,8 @@ interface SlaWorkbenchProps {
   ledger: LedgerView | null;
   wallet: WalletController;
   onSettled: () => void;
+  /** Increments when the hero asks for a run; the panel runs on every change. */
+  runSignal: number;
 }
 
 type SettleState =
@@ -48,10 +50,15 @@ type SettleState =
 const REASON_NO_CALL =
   "Settlement is available once a call has been measured: the verifier returns the exact settleOrder payload for it.";
 
-export function SlaWorkbench({ config, configError, ledger, wallet, onSettled }: SlaWorkbenchProps) {
+export function SlaWorkbench({ config, configError, ledger, wallet, onSettled, runSignal }: SlaWorkbenchProps) {
   const fixtures = useMemo<FixturePublic[]>(() => config?.fixtures ?? [], [config]);
   const [slug, setSlug] = useState<string | null>(null);
-  const fixture = fixtures.find((candidate) => candidate.slug === slug) ?? fixtures[0] ?? null;
+  const preferred = useMemo(() => {
+    const external = fixtures.find((f) => f.backed_by === "external");
+    const model = fixtures.find((f) => f.backed_by === "jev");
+    return external ?? model ?? fixtures[0] ?? null;
+  }, [fixtures]);
+  const fixture = fixtures.find((candidate) => candidate.slug === slug) ?? preferred;
 
   /**
    * The onchain covenants this fixture corresponds to, newest registration first.
@@ -63,6 +70,27 @@ export function SlaWorkbench({ config, configError, ledger, wallet, onSettled }:
    * so a second run does not repeat the walk. Matching is on the interface's own
    * labels (name, endpoint), never on position.
    */
+  /**
+   * Settled calls to this covenant, as the chain recorded them.
+   *
+   * Filtered to the covenant's onchain ids so a re-registration does not mix two
+   * price regimes into one distribution.
+   */
+  const history = useMemo(() => {
+    if (!fixture || !ledger) return [];
+    const ids = new Set(
+      ledger.services
+        .filter((service) => service.name === fixture.name || service.endpoint_uri.includes(fixture.slug))
+        .map((service) => service.id),
+    );
+    return ledger.orders
+      .filter((order) => ids.has(order.service_id))
+      .map((order) => ({
+        latencyMs: order.measured_latency_ms,
+        verdict: verdictOfStatus(order.status),
+      }));
+  }, [fixture, ledger]);
+
   const covenantCandidates = useMemo(() => {
     if (!fixture || !ledger) return [];
     return ledger.services
@@ -187,6 +215,34 @@ export function SlaWorkbench({ config, configError, ledger, wallet, onSettled }:
 
   const providerIndex =
     fixture && run && run.quote.split_bps[0] === fixture.provider_split_bps ? 0 : -1;
+
+  /**
+   * The hero's button runs a call, but a call is only *bound* to a covenant once
+   * the ledger has been read. Pressing it during the first read would produce an
+   * unbound measurement — real, but weaker than it should be — so the request is
+   * held until the chain state arrives.
+   */
+  const seenSignal = useRef(runSignal);
+  const waitingForLedger = useRef(false);
+  useEffect(() => {
+    if (runSignal === seenSignal.current) return;
+    seenSignal.current = runSignal;
+    if (!ledger) {
+      waitingForLedger.current = true;
+      return;
+    }
+    void runCall();
+    // `runCall` is stable for a given fixture; re-running on its identity would
+    // fire a second time when the fixture object is rebuilt by a ledger refresh.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runSignal]);
+
+  useEffect(() => {
+    if (!ledger || !waitingForLedger.current) return;
+    waitingForLedger.current = false;
+    void runCall();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ledger]);
 
   const runCall = useCallback(async (): Promise<void> => {
     if (!fixture) return;
@@ -328,7 +384,7 @@ export function SlaWorkbench({ config, configError, ledger, wallet, onSettled }:
       <section className="panel" aria-labelledby="workbench-heading">
         <div className="panel__head">
           <h2 className="panel__title" id="workbench-heading">
-            SLA workbench
+            Run a call
           </h2>
         </div>
         <div className="panel__body stack">
@@ -352,10 +408,10 @@ export function SlaWorkbench({ config, configError, ledger, wallet, onSettled }:
       <section className="panel" aria-labelledby="workbench-heading">
         <div className="panel__head">
           <h2 className="panel__title" id="workbench-heading">
-            SLA workbench
+            Run a call
           </h2>
           <span className="panel__note">
-            {fixtures.length} covenant{fixtures.length === 1 ? "" : "s"} published by this deployment
+            {fixtures.length} published covenants · pick one, then run it
           </span>
         </div>
         <div className="panel__body stack">
@@ -365,50 +421,75 @@ export function SlaWorkbench({ config, configError, ledger, wallet, onSettled }:
               from the verifier&rsquo;s own configuration.
             </p>
           ) : (
-            <fieldset className="picker">
-              <legend className="sr-only">Choose a covenant</legend>
-              {fixtures.map((candidate) => (
-                <label
-                  key={candidate.slug}
-                  className="picker__row"
-                  data-selected={candidate.slug === fixture.slug}
-                >
-                  <input
-                    type="radio"
-                    name="covenant"
-                    value={candidate.slug}
-                    checked={candidate.slug === fixture.slug}
-                    onChange={() => setSlug(candidate.slug)}
-                  />
+            <div className="rail">
+              <div className="rail__label" id="covenant-rail-label">
+                Covenant
+              </div>
+              {/*
+                A rail rather than a list: six services stacked with their terms
+                pushes the curve and the runner below the fold, and the first
+                thing a reader should meet is the selected covenant's terms, not a
+                catalogue. Native radio inputs, visually hidden, so arrow keys and
+                screen readers still work.
+              */}
+              <div className="rail__options" role="radiogroup" aria-labelledby="covenant-rail-label">
+                {fixtures.map((candidate) => (
+                  <label
+                    key={candidate.slug}
+                    className="rail__option"
+                    data-selected={candidate.slug === fixture.slug}
+                    title={candidate.backing}
+                  >
+                    <input
+                      className="sr-only"
+                      type="radio"
+                      name="covenant"
+                      value={candidate.slug}
+                      checked={candidate.slug === fixture.slug}
+                      onChange={() => setSlug(candidate.slug)}
+                    />
+                    <span className="rail__name">{candidate.name}</span>
+                    <span className="rail__price mono">{candidate.price_usdc}</span>
+                    <span
+                      className={`rail__kind rail__kind--${candidate.backed_by}`}
+                      aria-label={
+                        candidate.backed_by === "jev"
+                          ? "model-backed"
+                          : candidate.backed_by === "external"
+                            ? "third-party API"
+                            : "reference service"
+                      }
+                    />
+                  </label>
+                ))}
+              </div>
+
+              <div className="rail__detail">
+                <p className="rail__summary">{fixture.summary}</p>
+                <p className="rail__facts mono">
+                  <span>{fixture.price_usdc} USDC per call</span>
+                  <span aria-hidden="true">·</span>
+                  <span>grace {formatDuration(fixture.grace_latency_ms)}</span>
+                  <span aria-hidden="true">·</span>
+                  <span>hard {formatDuration(fixture.hard_timeout_ms)}</span>
+                  <span aria-hidden="true">·</span>
+                  <span>max rebate {formatBps(fixture.max_rebate_bps)}</span>
+                  <span aria-hidden="true">·</span>
                   <span>
-                    <span className="picker__title">
-                      {candidate.name}
-                      {/*
-                        What produces the response changes what a latency
-                        promise means, so it is stated rather than implied.
-                      */}
-                      <span
-                        className={`tag tag--inline ${candidate.backed_by === "jev" ? "tag--verified" : "tag--muted"}`}
-                        title={candidate.backing}
-                      >
-                        {candidate.backed_by === "jev" ? "model-backed" : "deterministic"}
-                      </span>
-                    </span>
-                    <span className="picker__note">{candidate.summary}</span>
-                    <span className="picker__facts">
-                      <span>{candidate.price_usdc} USDC per call</span>
-                      <span>grace {formatDuration(candidate.grace_latency_ms)}</span>
-                      <span>hard {formatDuration(candidate.hard_timeout_ms)}</span>
-                      <span>max rebate {formatBps(candidate.max_rebate_bps)}</span>
-                      <span>
-                        split {formatBps(candidate.provider_split_bps)} /{" "}
-                        {formatBps(10_000 - candidate.provider_split_bps)}
-                      </span>
-                    </span>
+                    split {formatBps(fixture.provider_split_bps)} /{" "}
+                    {formatBps(10_000 - fixture.provider_split_bps)}
                   </span>
-                </label>
-              ))}
-            </fieldset>
+                  <span aria-hidden="true">·</span>
+                  <span className={`rail__badge rail__badge--${fixture.backed_by}`}>
+                    {fixture.backed_by === "jev"
+                      ? "model-backed"
+                      : fixture.backed_by === "external"
+                        ? "third-party API"
+                        : "reference service"}
+                  </span>
+                </p>
+              </div>
+            </div>
           )}
 
           {quoteError ? (
@@ -454,6 +535,7 @@ export function SlaWorkbench({ config, configError, ledger, wallet, onSettled }:
                     ? { latencyMs: run.outcome.latency_ms, verdict: run.quote.status }
                     : null
                 }
+                history={history}
               />
             ) : quoteLoading ? (
               <p className="small muted">
@@ -470,7 +552,8 @@ export function SlaWorkbench({ config, configError, ledger, wallet, onSettled }:
         </section>
       ) : null}
 
-      <ExecutePanel
+      <div id="run">
+        <ExecutePanel
         fixture={fixture}
         mode={mode}
         onMode={setMode}
@@ -483,7 +566,8 @@ export function SlaWorkbench({ config, configError, ledger, wallet, onSettled }:
         boundOrderId={effectiveBoundOrderId}
         onBindOrder={setBoundOrderId}
         covenantIds={covenantIds}
-      />
+        />
+      </div>
 
       <TelemetryTrace
         rows={rows}

@@ -47,6 +47,46 @@ use std::time::Instant;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::services::{ServeDir, ServeFile};
 
+/// The last ledger read, and when it was taken.
+///
+/// Served immediately while a fresh read runs in the background. A judge opening
+/// the page during a settlement sees the previous second's state, which is the
+/// right thing to trade for not waiting on ~30 RPC calls.
+#[derive(Clone, Default)]
+struct LedgerCache {
+    inner: Arc<tokio::sync::Mutex<Option<(std::time::Instant, state::LedgerView)>>>,
+    refreshing: Arc<std::sync::atomic::AtomicBool>,
+}
+
+const LEDGER_TTL: std::time::Duration = std::time::Duration::from_secs(15);
+
+impl LedgerCache {
+    async fn get(&self) -> Option<state::LedgerView> {
+        self.inner
+            .lock()
+            .await
+            .as_ref()
+            .map(|(_, view)| view.clone())
+    }
+
+    async fn age(&self) -> Option<std::time::Duration> {
+        self.inner.lock().await.as_ref().map(|(at, _)| at.elapsed())
+    }
+
+    async fn put(&self, view: state::LedgerView) {
+        *self.inner.lock().await = Some((std::time::Instant::now(), view));
+    }
+
+    /// True when this call is the one that should do the reading.
+    fn claim_refresh(&self) -> bool {
+        !self.refreshing.swap(true, std::sync::atomic::Ordering::SeqCst)
+    }
+
+    fn release_refresh(&self) {
+        self.refreshing.store(false, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
 #[derive(Clone)]
 struct App {
     cfg: Arc<config::Config>,
@@ -54,6 +94,10 @@ struct App {
     executor: executor::Executor,
     /// The System One client behind the model-backed services.
     jev: llm::JevClient,
+    /// Where each order's transactions are, filled in the background.
+    log_index: state::LogIndex,
+    /// The last ledger read, served while a new one is taken.
+    ledger_cache: LedgerCache,
     /// The covenants this verifier will attest to. Empty means none loaded, in
     /// which case it still measures and quotes but refuses to sign.
     registry: Arc<covenants::CovenantRegistry>,
@@ -114,13 +158,37 @@ async fn main() -> anyhow::Result<()> {
         tracing::warn!("no TYPESAFE_API_KEY: the model-backed services will report that they cannot run");
     }
 
+    let log_index = state::LogIndex::new();
+    if let (Some(from_block), Some(contract)) = (cfg.deploy_block, cfg.contract) {
+        log_index.refresh(
+            eth.clone(),
+            format!("0x{}", hex::encode(contract)),
+            from_block,
+        );
+    }
+
     let app_state = App {
         cfg: Arc::new(cfg.clone()),
         eth,
         executor,
         jev,
+        log_index,
+        ledger_cache: LedgerCache::default(),
         registry,
     };
+
+    // Warm the ledger before anyone asks for it, so the first visitor does not
+    // pay for the cold read.
+    {
+        let warm = app_state.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+            if let Some(view) = build_ledger(&warm).await {
+                warm.ledger_cache.put(view).await;
+                tracing::info!("ledger warmed");
+            }
+        });
+    }
 
     // The built-in services are real HTTP endpoints at the paths the covenants
     // publish (`/mock/<slug>`), which is why they are mounted at the root rather
@@ -211,6 +279,8 @@ struct Health {
     /// Whether the model-backed services have a credential, and what is left of
     /// the budget that bounds them. Both are operational facts a caller deserves.
     model_services: ModelServices,
+    /// True while the settlement-transaction index is still walking the chain.
+    log_index_scanning: bool,
     uptime_s: u64,
 }
 
@@ -263,6 +333,7 @@ async fn health(State(app): State<App>) -> Response {
             max_concurrent: app.jev.budget().max_concurrent,
             per_minute: app.jev.budget().per_minute,
         },
+        log_index_scanning: app.log_index.is_scanning(),
         uptime_s: started.elapsed().as_secs(),
     };
     Json(body).into_response()
@@ -295,6 +366,10 @@ struct FixturePublic {
     slug: String,
     name: String,
     summary: String,
+    /// The absolute URL, when the service is a third party's.
+    endpoint: Option<String>,
+    /// `GET` or `POST`, so the interface can describe the call accurately.
+    method: String,
     /// `deterministic` or `jev`. Shown in the UI, because "this endpoint is a
     /// model call" changes what a latency promise means.
     backed_by: String,
@@ -322,6 +397,8 @@ async fn get_config(State(app): State<App>) -> Response {
             slug: f.slug.clone(),
             name: f.name.clone(),
             summary: f.summary.clone(),
+            endpoint: f.endpoint.clone(),
+            method: f.method.clone(),
             backed_by: f.backed_by.clone(),
             backing: f.backing.clone(),
             price_usdc: f.price_usdc.clone(),
@@ -359,9 +436,8 @@ async fn get_config(State(app): State<App>) -> Response {
 // GET /api/ledger
 // ---------------------------------------------------------------------------
 
-async fn ledger(State(app): State<App>) -> Response {
-    let roles: Vec<(String, &'static str)> = app
-        .cfg
+fn watch_roles(app: &App) -> Vec<(String, &'static str)> {
+    app.cfg
         .watch_addresses
         .iter()
         .enumerate()
@@ -374,11 +450,63 @@ async fn ledger(State(app): State<App>) -> Response {
             };
             (format!("0x{}", hex::encode(a)), role)
         })
-        .collect();
+        .collect()
+}
 
-    match state::read_ledger(&app.cfg, &app.eth, &roles).await {
-        Ok(view) => Json(view).into_response(),
-        Err(err) => problem(StatusCode::BAD_GATEWAY, format!("could not read the ledger from Arc: {err}")),
+async fn build_ledger(app: &App) -> Option<state::LedgerView> {
+    let roles = watch_roles(app);
+    match state::read_ledger(&app.cfg, &app.eth, &app.log_index, &roles).await {
+        Ok(view) => Some(view),
+        Err(err) => {
+            tracing::warn!("ledger read failed: {err}");
+            None
+        }
+    }
+}
+
+async fn ledger(State(app): State<App>) -> Response {
+    // A fresh-enough answer is the answer.
+    if let Some(age) = app.ledger_cache.age().await {
+        if age < LEDGER_TTL {
+            if let Some(view) = app.ledger_cache.get().await {
+                return Json(view).into_response();
+            }
+        }
+    }
+
+    // Stale: hand it over now, refresh behind the response.
+    if let Some(stale) = app.ledger_cache.get().await {
+        if app.ledger_cache.claim_refresh() {
+            let app = app.clone();
+            tokio::spawn(async move {
+                if let Some(fresh) = build_ledger(&app).await {
+                    app.ledger_cache.put(fresh).await;
+                }
+                app.ledger_cache.release_refresh();
+            });
+        }
+        return Json(stale).into_response();
+    }
+
+    // Cold: there is nothing to serve, so this request does the reading.
+    if app.ledger_cache.claim_refresh() {
+        let built = build_ledger(&app).await;
+        app.ledger_cache.release_refresh();
+        match built {
+            Some(view) => {
+                app.ledger_cache.put(view.clone()).await;
+                Json(view).into_response()
+            }
+            None => problem(
+                StatusCode::BAD_GATEWAY,
+                "could not read the ledger from Arc",
+            ),
+        }
+    } else {
+        problem(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "the ledger is being read for the first time; retry in a moment",
+        )
     }
 }
 
@@ -819,7 +947,7 @@ async fn execute(State(app): State<App>, Json(req): Json<ExecuteRequest>) -> Res
     }
 
     // ---- execute the call ---------------------------------------------------
-    let registered_url = format!("{}{}", app.cfg.mock_base_url(), fixture.path);
+    let registered_url = fixture.resolve_url(&app.cfg.mock_base_url());
 
     // The body the call will carry, fixed once. `body_raw` is the byte-exact form
     // the caller hashed into the order; without it the body is built from the
@@ -906,10 +1034,17 @@ async fn execute(State(app): State<App>, Json(req): Json<ExecuteRequest>) -> Res
         );
     }
 
+    let method = fixture.http_method();
     let call = executor::CallRequest {
         url: url.clone(),
-        method: executor::Method::Post,
-        body: Some(body_verbatim.clone()),
+        // A GET carries no body: for an external endpoint the body would be
+        // meaningless, and sending one can change what the publisher returns.
+        body: if matches!(method, executor::Method::Get) {
+            None
+        } else {
+            Some(body_verbatim.clone())
+        },
+        method,
         headers: vec![("x-vericall-fixture".into(), fixture.slug.clone())],
         // Give the service enough room to answer at or past the hard edge; a
         // timeout must be a measured breach, not a client-side abort at the SLA.
@@ -1325,8 +1460,17 @@ async fn kernel(
         return problem(StatusCode::NOT_FOUND, "built-in services are disabled");
     }
     let Some(fixture) = config::fixture(&slug) else {
-        return problem(StatusCode::NOT_FOUND, format!("`{slug}` is not a built-in service"));
+        return problem(StatusCode::NOT_FOUND, format!("`{slug}` is not a published service"));
     };
+    if fixture.is_external() {
+        return problem(
+            StatusCode::NOT_FOUND,
+            format!(
+                "`{slug}` is a third-party API at {}, not an endpoint this verifier serves. The verifier calls it directly when the covenant is executed.",
+                fixture.endpoint.as_deref().unwrap_or("an unknown address")
+            ),
+        );
+    }
     let is_model_backed = matches!(slug.as_str(), "intent-router" | "payment-guard");
     if is_model_backed {
         // There is no latency to inject: the model call is the latency, and it is

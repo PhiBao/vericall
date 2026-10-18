@@ -209,6 +209,13 @@ pub struct ServiceFixture {
     pub summary: String,
     /// The path this service answers on, relative to the verifier's base URL.
     pub path: String,
+    /// An absolute endpoint, when the service is somebody else's API. Present
+    /// means the verifier dials this exact URL and `path` is only a label.
+    #[serde(default)]
+    pub endpoint: Option<String>,
+    /// `GET` or `POST`. Defaults to POST, which is what the built-in services take.
+    #[serde(default = "default_method")]
+    pub method: String,
     /// `deterministic` or `jev`: what actually produces the response.
     pub backed_by: String,
     /// One sentence on what is behind the endpoint, shown to a reader.
@@ -223,6 +230,10 @@ pub struct ServiceFixture {
     /// The provider's share; the remainder goes to the upstream dependency.
     pub provider_bps: u16,
     pub initial_bond_usdc: String,
+}
+
+fn default_method() -> String {
+    "POST".to_string()
 }
 
 #[derive(Debug, Deserialize)]
@@ -277,6 +288,28 @@ impl ServiceFixture {
 
     pub fn schema_value(&self) -> serde_json::Value {
         self.schema.clone()
+    }
+
+    /// The URL to dial. An external service names its own absolute endpoint; a
+    /// built-in one is served by this verifier under `path`.
+    pub fn resolve_url(&self, base_url: &str) -> String {
+        match &self.endpoint {
+            Some(absolute) => absolute.clone(),
+            None => format!("{}{}", base_url.trim_end_matches('/'), self.path),
+        }
+    }
+
+    /// True when the endpoint belongs to somebody else. The distinction matters:
+    /// the verifier serves the others itself, so only these can surprise it.
+    pub fn is_external(&self) -> bool {
+        self.endpoint.is_some()
+    }
+
+    pub fn http_method(&self) -> crate::executor::Method {
+        match self.method.to_ascii_uppercase().as_str() {
+            "GET" => crate::executor::Method::Get,
+            _ => crate::executor::Method::Post,
+        }
     }
 
     /// True when the endpoint's response is produced by a model rather than by

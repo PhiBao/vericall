@@ -136,6 +136,10 @@ interesting case and the reason the model-backed pair exists:
 | `intent-router` | 0.05 USDC | 2.5 s / 10 s | One batched Jev request: a Choice over five payment intents, two Nouls for presence, a Score for urgency, a Noul for whether a person must authorise. Returns the full probability distribution, the model's confidence, and what is missing. |
 | `payment-guard` | 0.08 USDC | 3 s / 12 s | One batched Jev request: five hazard Nouls (amount, counterparty, duplication, urgency pressure, restricted party) plus a severity Score. The verdict is computed in code from published thresholds. |
 
+The FX covenant is the one that answers "is this a simulation?" most directly: the
+call goes to a publisher this project does not control, and the settlement is the
+contract's response to whatever that publisher actually returned that second.
+
 Putting a model under an SLA is only honest if the promise is one a model can
 keep, so two design choices matter:
 
@@ -209,7 +213,7 @@ Built for **Arc Microgrants: Built with Arc Studio** (Circle, October 2026).
 
 | Criterion | Weight | How this submission answers it |
 | --- | --- | --- |
-| Real USDC moving on Arc mainnet | 30% | **Seven** mainnet settlements across three distinct wallets and two covenants, covering every verdict the contract can reach — pass, degraded, breach and a pass attested by the live public verifier — each with a transaction hash and the exact amounts above. |
+| Real USDC moving on Arc mainnet | 30% | **Nine** mainnet settlements across three distinct wallets and two covenants, covering every verdict the contract can reach — pass, degraded, breach and a pass attested by the live public verifier — each with a transaction hash and the exact amounts above. |
 | Use of Arc Studio across the build | 25% | The contract, its Foundry test suite and its README were written, iterated and tested inside Arc Studio — workspace [`studio.arc.io/app/b3658244-c47e-4bb9-b1c5-3b34acc595cc`](https://studio.arc.io/app/b3658244-c47e-4bb9-b1c5-3b34acc595cc). Mainnet deployment, the verifier and the app were then built around that artefact; a second Studio turn built the in-workspace frontend. |
 | A working product | 25% | [vericall.fly.dev](https://vericall.fly.dev) — the app and the verifier in one process, serving a proof ledger that reads Arc mainnet over three independent RPC endpoints and a workbench that runs real calls and draws the settlement curve. Useful with no wallet at all; the one settlement in the table above that names the live verifier is the proof that path works. |
 | Potential to go further | 20% | The covenant is a general instrument: metered SaaS billing, agent-to-agent task settlement, and dependency royalties are the same primitive with different terms. A path into the Circle Grant Program is sketched under *Roadmap*. |
@@ -322,6 +326,22 @@ node scripts/verify.ts            --network arc-testnet
 ```
 
 Every script prints the explorer link, the gas used and the fee in USDC. `--dry-run` is supported where a step would spend.
+
+### Reading the chain without making a judge wait
+
+The ledger is a read-mostly view: nine covenants, eleven orders, three balances and
+an event scan, which is about thirty RPC calls. Serially that took the better part
+of a minute on Arc's public endpoints, so three things changed:
+
+* reads go out concurrently, bounded to eight at a time so the burst stays polite;
+* the covenant's split table comes from `getService` rather than a second
+  `getSplits` call, halving the per-covenant cost;
+* the settlement-transaction index is incremental and built in the background, and
+  the whole ledger is served from a 15-second cache with stale-while-revalidate.
+
+A warm read is now ~0.2 s from the deployed region, and a cold start warms itself
+at boot. A judge never waits on a log scan, and a row whose transaction has not
+been indexed yet says so rather than pretending the transaction does not exist.
 
 ### The live deployment
 

@@ -25,7 +25,7 @@ import {
   type CovenantFile,
   type CovenantRecord,
 } from "./lib/files.ts";
-import { fixture, fixtures, parseBondOverrides, schemaHash } from "./lib/fixtures.ts";
+import { fixture, fixtures, parseBondOverrides, resolveEndpoint, schemaHash } from "./lib/fixtures.ts";
 
 async function main() {
   const key = (arg("network", "arc-mainnet") ?? "arc-mainnet") as "arc-mainnet" | "arc-testnet";
@@ -97,7 +97,7 @@ async function main() {
       verifier,
       dependency,
       name: terms.name,
-      endpointUri: `${base}${terms.path}`,
+      endpointUri: resolveEndpoint(terms, base),
       schemaHash: schemaHash(terms.schema),
       callPriceUsdc: terms.priceUsdc,
       graceLatencyMs: terms.graceLatencyMs,

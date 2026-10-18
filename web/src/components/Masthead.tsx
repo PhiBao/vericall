@@ -147,9 +147,7 @@ export function Masthead({ chain, loading, wallet }: MastheadProps) {
         <Mark decorative />
         <div>
           <span className="brand__name">VeriCall</span>
-          <span className="brand__promise">
-            USDC in escrow for a software call, released against the promise that call published.
-          </span>
+          <span className="brand__promise">SLA settlement for software that pays software</span>
         </div>
       </div>
       <div className="toolbar">

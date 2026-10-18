@@ -24,7 +24,12 @@ the promise is missed.**
 | **Deploy transaction** | [`0xe251f33d…`](https://explorer.arc.io/tx/0xe251f33dab9eb1b21e526d235233ecb7fa12a59f6453e587ab274609d04fa437) |
 | **Contract (Arc testnet)** | same address, [`0xb980fa2a…`](https://explorer.testnet.arc.io/address/0xb980fa2a21b09a7304da285187f67daf55600619) — the two chains share a deployer and a nonce |
 
-## Two of the services are a real model call
+## One covenant buys a third party's API; two are real model calls
+
+`fx-rate` is a real call to the European Central Bank reference rate published by
+Frankfurter — a publisher this project does not control. The verifier calls it,
+measures it, and validates the shape of the response; the contract settles on what
+came back. That is the plainest answer to "is this a simulation?".
 
 `intent-router` and `payment-guard` are served by a live **TypeSafe Jev** request,
 not by fixed logic. One batched question set each: a Choice over a closed set of

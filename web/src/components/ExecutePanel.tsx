@@ -186,22 +186,36 @@ export function ExecutePanel({
         <div className="row--between">
           <div className="row">
             <div className="stack--tight">
-              <span className="fact__label" id="mode-label">
-                Mode
-              </span>
-              <div className="segmented" role="group" aria-labelledby="mode-label">
-                {MODES.map((candidate) => (
-                  <button
-                    key={candidate}
-                    type="button"
-                    aria-pressed={mode === candidate}
-                    onClick={() => onMode(candidate)}
-                  >
-                    {candidate}
-                  </button>
-                ))}
-              </div>
-              <span className="tiny muted">{MODE_NOTE[mode]}</span>
+              {fixture && fixture.backed_by === "deterministic" ? (
+                <>
+                  <span className="fact__label" id="mode-label">
+                    Mode
+                  </span>
+                  <div className="segmented" role="group" aria-labelledby="mode-label">
+                    {MODES.map((candidate) => (
+                      <button
+                        key={candidate}
+                        type="button"
+                        aria-pressed={mode === candidate}
+                        onClick={() => onMode(candidate)}
+                      >
+                        {candidate}
+                      </button>
+                    ))}
+                  </div>
+                  <span className="tiny muted">{MODE_NOTE[mode]}</span>
+                </>
+              ) : (
+                <>
+                  <span className="fact__label">What this call is</span>
+                  <span className="small">
+                    {fixture?.backed_by === "external"
+                      ? "a real request to a third-party API, at whatever latency it takes"
+                      : "a real model call, at whatever latency it takes"}
+                  </span>
+                  <span className="tiny muted">{fixture?.backing}</span>
+                </>
+              )}
             </div>
 
             <div className="field field--compact">
@@ -240,7 +254,7 @@ export function ExecutePanel({
             </button>
             <span className="tiny muted">
               {fixture
-                ? `the verifier will POST to the covenant endpoint and measure it against ${formatBps(fixture.max_rebate_bps)} max rebate`
+                ? `the verifier will ${fixture.method === "GET" ? "call" : "post to"} the covenant endpoint and measure it against ${formatBps(fixture.max_rebate_bps)} max rebate`
                 : "pick a covenant first"}
             </span>
           </div>

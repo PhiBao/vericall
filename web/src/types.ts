@@ -121,10 +121,14 @@ export interface FixturePublic {
   slug: string;
   name: string;
   summary: string;
-  /** `deterministic` or `jev` — what actually produces the response. */
+  /** `deterministic`, `jev` or `external` — what actually produces the response. */
   backed_by: string;
   /** One sentence on what is behind the endpoint. */
   backing: string;
+  /** An absolute URL, when the service is a third party's API. */
+  endpoint?: string | null;
+  /** `GET` or `POST`; defaults to POST. */
+  method?: string;
   price_usdc: string;
   grace_latency_ms: number;
   hard_timeout_ms: number;

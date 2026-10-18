@@ -50,6 +50,12 @@ interface PayoffCurveProps {
   probeLoading: boolean;
   /** The last executed call, so a real measurement lands on the curve. */
   measured: { latencyMs: number; verdict: Verdict } | null;
+  /**
+   * Every settled call to this covenant, placed where it actually landed. This is
+   * what turns the drawing from an illustration of the terms into a picture of
+   * how the terms have been used.
+   */
+  history: { latencyMs: number; verdict: Verdict }[];
 }
 
 const PAD = { top: 24, right: 16, bottom: 38, left: 66 };
@@ -177,6 +183,7 @@ export function PayoffCurve({
   probe,
   probeLoading,
   measured,
+  history,
 }: PayoffCurveProps) {
   const { ref, width } = useContainerWidth();
 
@@ -254,6 +261,27 @@ export function PayoffCurve({
       source: "interpolated between the verifier’s sampled points",
     };
   }, [probe, curve, hardMs, latency]);
+
+  /**
+   * The latency distribution of this covenant's settled calls.
+   *
+   * Nearest-rank percentiles over the measured milliseconds, so "p95" means a
+   * real call a reader can find in the ledger, not an interpolated figure.
+   */
+  const distribution = useMemo(() => {
+    if (history.length === 0) return null;
+    const sorted = [...history].map((h) => h.latencyMs).sort((a, b) => a - b);
+    const rank = (p: number): number => sorted[Math.min(sorted.length - 1, Math.ceil(p * sorted.length) - 1)] ?? 0;
+    return {
+      n: sorted.length,
+      p50: rank(0.5),
+      p95: rank(0.95),
+      pass: history.filter((h) => h.verdict === "pass").length,
+      degraded: history.filter((h) => h.verdict === "degraded").length,
+      breach: history.filter((h) => h.verdict === "breach").length,
+      reclaimed: history.filter((h) => h.verdict === "reclaimed").length,
+    };
+  }, [history]);
 
   const coarse = Math.max(1, Math.round(xMax / 20));
   const measuredX = measured ? x(measured.latencyMs) : null;
@@ -441,6 +469,61 @@ export function PayoffCurve({
         {series.map((line) => (
           <path key={line.key} className={line.className} d={path(line.points)} />
         ))}
+
+        {/*
+          Settled calls, placed by the latency that was measured for them. They sit
+          on the provider line because that is what the contract paid at that
+          latency; the colour says which branch the call fell into.
+        */}
+        {history.length > 0 ? (
+          <g>
+            {history.map((call, index) => (
+              <circle
+                key={`call-${index}`}
+                className={`curve__call curve__call--${call.verdict}`}
+                cx={x(Math.min(call.latencyMs, xMax))}
+                cy={PAD.top + plotHeight}
+                r={2.6}
+              >
+                <title>{`settled call · ${formatDuration(call.latencyMs)} · ${call.verdict}`}</title>
+              </circle>
+            ))}
+            {distribution ? (
+              <>
+                <line
+                  className="curve__percentile"
+                  x1={x(Math.min(distribution.p50, xMax))}
+                  x2={x(Math.min(distribution.p50, xMax))}
+                  y1={PAD.top + plotHeight - 10}
+                  y2={PAD.top + plotHeight}
+                />
+                <line
+                  className="curve__percentile"
+                  x1={x(Math.min(distribution.p95, xMax))}
+                  x2={x(Math.min(distribution.p95, xMax))}
+                  y1={PAD.top + plotHeight - 16}
+                  y2={PAD.top + plotHeight}
+                />
+                <text
+                  className="curve__label"
+                  x={Math.min(x(distribution.p50), PAD.left + plotWidth - 40)}
+                  y={PAD.top + plotHeight - 20}
+                  textAnchor="middle"
+                >
+                  p50
+                </text>
+                <text
+                  className="curve__label"
+                  x={Math.min(x(distribution.p95), PAD.left + plotWidth - 40)}
+                  y={PAD.top + plotHeight - 26}
+                  textAnchor="middle"
+                >
+                  p95
+                </text>
+              </>
+            ) : null}
+          </g>
+        ) : null}
 
         {/* A real measurement from the last executed call. */}
         {measured && measuredX !== null ? (
