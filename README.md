@@ -27,16 +27,17 @@ The rebate is not a policy decision made by a human after the fact. It is arithm
 
 ## The walkthrough
 
-[`docs/assets/vericall-demo.mp4`](docs/assets/vericall-demo.mp4) — two minutes, no slides:
+[`docs/assets/vericall-demo.mp4`](docs/assets/vericall-demo.mp4) — two and a half minutes, no slides:
 
 | Beat | What it shows |
 | --- | --- |
 | 0:00 | The problem: software pays software in advance and has no recourse |
-| 0:15 | The live app on Arc mainnet. A real call to `api.frankfurter.dev` — the ECB's reference rate, a publisher this project does not run — measured at 196 ms and checked against the covenant's schema |
-| 0:50 | The settlement curve: what a given overrun costs, with the covenant's own settled calls plotted on it |
-| 1:05 | The ledger: every order, its verdict, its three-way split, and a link to the transaction |
-| 1:25 | **The loop from the browser**: the request written, escrowed from a wallet, run, attested, and settled onchain — ending on the receipt and the hash |
-| 1:55 | `verify.ts`: every claim checked against the chain, no key, no spending |
+| 0:16 | The live app on Arc mainnet. A real call to `api.frankfurter.dev` — the ECB's reference rate, a publisher this project does not run — measured at 196 ms and checked against the covenant's schema |
+| 0:35 | The settlement curve: what a given overrun costs, with the covenant's own settled calls plotted on it |
+| 0:52 | The ledger: every order, its verdict, its three-way split, and a link to the transaction |
+| 1:10 | **The loop from the browser**: the request written, escrowed from a wallet, run, attested, and settled onchain — ending on the receipt and the hash |
+| 1:40 | **The transaction on Arc's explorer**: one settlement, three transfers inside it, confirmed in half a second |
+| 2:01 | **The build and the chain from a terminal**: the contract suite, the independent check against mainnet, and `cast chain-id` answering 5042 |
 
 The narration is what the interface is doing, not what it might do: every figure on screen is read from the contract or measured during the take. It was recorded against a local instance of the deployed build — the same binary and the same front-end bundle, reading Arc mainnet — because the recorder drives the page itself.
 
