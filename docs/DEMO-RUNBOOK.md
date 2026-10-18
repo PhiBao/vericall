@@ -71,7 +71,7 @@ Still without connecting anything:
 - Point at the **invariant** line: `sum(funded escrow) = totalEscrowed()`.
 - Point at the **settled orders** table and read one row aloud:
   "Order 2 measured **1250 milliseconds**. The covenant's grace is 500 and its hard timeout is 2000,
-  so it ran half-way into the rebate band and the caller got **0.035097 USDC** back — that is not
+  so it ran exactly half-way into the rebate band and the caller got **0.04 USDC** back — that is not
   approximately 3.5 cents, it is the consequence of that one millisecond."
 - Click the transaction link on row 2. On the explorer: show the USDC transfers — one out to the
   provider, one to the dependency, one back to the caller. "Three transfers, one transaction."
@@ -103,7 +103,7 @@ two concurrent calls, twelve a minute, three hundred a day, all reported by
 Scroll to the **Payoff curve** and drag the slider past the grace edge. Say the arithmetic
 rather than the adjective:
 
-> "At 1250 milliseconds on the risk covenant the rebate is 0.035097 — not 'about 3.5
+> "At 1250 milliseconds on the risk covenant the rebate is 0.04 — not 'about 4
 > cents'. One millisecond more and it is a different number, and quoteSettlement
 > returns the same one before you agree to anything."
 

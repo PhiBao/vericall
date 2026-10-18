@@ -51,11 +51,11 @@ refusal and the covenant refunds the caller out of the provider's stake.
 | Verdict | What moved | Transaction |
 | --- | --- | --- |
 | **Pass** — 0.20 USDC, grace 500 ms | 0.16 USDC to the provider, 0.04 to its upstream dependency | [`0x8a2e8f07…`](https://explorer.arc.io/tx/0x8a2e8f07a0c1e0bf28dae3c4b0a23c853ffc4f7d4f591f02f689e10af0833cc1) |
-| **Degraded** — 1250 ms measured | 0.035097 rebated to the caller, 0.128 to the provider, 0.032 to the dependency | [`0x83f9b9f5…`](https://explorer.arc.io/tx/0x83f9b9f51c03316415b99533a4967940471d13cdc98db177406712eba647028f) |
+| **Degraded** — 1250 ms measured | 0.04 rebated to the caller, 0.128 to the provider, 0.032 to the dependency | [`0x83f9b9f5…`](https://explorer.arc.io/tx/0x83f9b9f51c03316415b99533a4967940471d13cdc98db177406712eba647028f) |
 | **Breach** — 2251 ms, schema violated | 0.2 escrow refunded plus 0.04 slashed from the provider's bond | [`0x11d372cf…`](https://explorer.arc.io/tx/0x11d372cfc5db58a1d3af74f9f960ba80a43b7e9462434329c49708ae9cf7bb31) |
 | **Pass, attested by the live deployment** | 0.16 + 0.04, signed by the service at vericall.fly.dev | [`0xf648f251…`](https://explorer.arc.io/tx/0xf648f251650a7315d8c6f6a87126ceebbc0e3dbd03d0171eb548be816778ef7f) |
 | **Pass on a model call** (`intent-router`, Jev) | 0.04 to the provider, 0.01 to its dependency, 251 ms | [`0x6370fb2f…`](https://explorer.arc.io/tx/0x6370fb2f945fcda6cd6a36770bcc9c449d3d6ba8564ec2b51ba8936190cc4fa1) |
-| **Breach from a real model outage** (`payment-guard`, Jev) | the service hit its own rate limit and refused; 0.096697 refunded to the caller, 0.02 slashed from the stake | [`0x586230ca…`](https://explorer.arc.io/tx/0x586230cac965d342ff09679ab5e1873098c133b231911ae82a0616e59d434c48) |
+| **Breach from a real model outage** (`payment-guard`, Jev) | the service hit its own rate limit and refused; 0.10 refunded to the caller (the 0.08 escrow plus a 0.02 penalty) | [`0x586230ca…`](https://explorer.arc.io/tx/0x586230cac965d342ff09679ab5e1873098c133b231911ae82a0616e59d434c48) |
 | **Pass on a third party's API** (`fx-rate`, ECB via Frankfurter) | 61 ms measured, 0.021 to the provider, 0.009 to its dependency — a call to a publisher this project does not control | [`0x5cccd30b…`](https://explorer.arc.io/tx/0x5cccd30b9bb91ded0d6d6cd462e7ecf9933c40be40a229855003c291b53d6388) |
 | **Pass, escrowed and settled from the app itself** (`fx-rate`) | 146 ms measured, 0.021 to the provider, 0.009 to its dependency — the whole loop in the browser, from a wallet that had never touched the contract. Orders 23 and 24 are two more of the same, at 166 ms and 156 ms | [`0x718bef04…`](https://explorer.arc.io/tx/0x718bef04f9f35d6145c546d67ddb8ecce8c48ad046e92012e320221017acf7e8) |
 

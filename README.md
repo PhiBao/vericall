@@ -51,8 +51,8 @@ Every row below is a real Arc mainnet transaction against the deployed contract.
 | # | Verdict | Measured | What the chain did | Transaction |
 | --- | --- | --- | --- | --- |
 | 1 | **Pass** | 126 ms, schema valid | **0.16 USDC** → provider, **0.04 USDC** → upstream dependency | [`0x8a2e8f07…`](https://explorer.arc.io/tx/0x8a2e8f07a0c1e0bf28dae3c4b0a23c853ffc4f7d4f591f02f689e10af0833cc1) |
-| 2 | **Degraded** | 1250 ms, schema valid | **0.035097 USDC** rebated to the caller, **0.128** → provider, **0.032** → dependency | [`0x83f9b9f5…`](https://explorer.arc.io/tx/0x83f9b9f51c03316415b99533a4967940471d13cdc98db177406712eba647028f) |
-| 3 | **Breach** | 2251 ms, schema violated | **0.236713 USDC** to the caller: the full 0.2 escrow refunded plus a 0.04 penalty slashed from the provider's bond | [`0x11d372cf…`](https://explorer.arc.io/tx/0x11d372cfc5db58a1d3af74f9f960ba80a43b7e9462434329c49708ae9cf7bb31) |
+| 2 | **Degraded** | 1250 ms, schema valid | **0.04 USDC** rebated to the caller, **0.128** → provider, **0.032** → dependency | [`0x83f9b9f5…`](https://explorer.arc.io/tx/0x83f9b9f51c03316415b99533a4967940471d13cdc98db177406712eba647028f) |
+| 3 | **Breach** | 2251 ms, schema violated | **0.24 USDC** to the caller: the full 0.2 escrow refunded plus a 0.04 penalty slashed from the provider's bond | [`0x11d372cf…`](https://explorer.arc.io/tx/0x11d372cfc5db58a1d3af74f9f960ba80a43b7e9462434329c49708ae9cf7bb31) |
 | 4 | **Pass, attested by the live public verifier** | 129 ms, schema valid | **0.16 USDC** → provider, **0.04 USDC** → dependency | [`0xf648f251…`](https://explorer.arc.io/tx/0xf648f251650a7315d8c6f6a87126ceebbc0e3dbd03d0171eb548be816778ef7f) |
 
 ### Invoice Field Extractor — 0.15 USDC, grace 400 ms, hard timeout 1500 ms, max rebate 50%, penalty 25%
@@ -63,7 +63,7 @@ Every row below is a real Arc mainnet transaction against the deployed contract.
 | 6 | **Degraded** | 953 ms, schema valid | **0.037704 USDC** rebated to the caller, **0.078608** → provider, **0.033688** → dependency | [`0xd330264a…`](https://explorer.arc.io/tx/0xd330264a95619e88bf8a7f4dd4c653e2edb569797b78f03d2b595940c7ca6d4c) |
 | 7 | **Breach** | 1753 ms, schema violated | **0.1875 USDC** to the caller: 0.15 refunded plus a 0.0375 bond penalty | [`0x4533793e…`](https://explorer.arc.io/tx/0x4533793edb45704ceaba12584d45da13a8c975324e1f19a9f7bd47ae9b872126) |
 
-Order 2 is worth reading closely: the call ran for **1250 ms**, one millisecond past the half-way point between the 500 ms grace and the 2000 ms hard timeout, so the rebate is **0.035097 USDC** — not "about 3.5 cents", but the exact consequence of that one millisecond. The same arithmetic runs for order 6: 953 ms against a 400 ms grace and a 1500 ms hard timeout produced a rebate of 0.037704, and `quoteSettlement` on the contract returns the identical number.
+Order 2 is worth reading closely: 1250 ms is exactly halfway between the 500 ms grace and the 2000 ms hard timeout, so the rebate is exactly half the covenant's 40% maximum — **0.04 USDC**, with 0.128 to the provider and 0.032 to its dependency, and the three transfers sum to the 0.2 escrow. Not "about four cents": the exact consequence of the arithmetic. Order 6 is the not-round case: 953 ms against a 400 ms grace and a 1500 ms hard timeout produced a rebate of 0.037704, and `quoteSettlement` on the contract returns the identical number.
 
 Order 4 is the one to check first if you are reviewing: its attestation was produced by the **live deployment** at `vericall.fly.dev`, which dialled its own public endpoint over HTTPS, measured the 129 ms itself, validated the schema, and signed. Nothing about that settlement came from a developer's laptop.
 
@@ -72,7 +72,7 @@ Order 4 is the one to check first if you are reviewing: its attestation was prod
 | # | Service | Verdict | Measured | What the chain did | Transaction |
 | --- | --- | --- | --- | --- | --- |
 | 8 | `intent-router` (**Jev**) | **Pass** | 251 ms, schema valid | 0.04 USDC → provider, 0.01 → dependency | [`0x6370fb2f…`](https://explorer.arc.io/tx/0x6370fb2f945fcda6cd6a36770bcc9c449d3d6ba8564ec2b51ba8936190cc4fa1) |
-| 11 | `payment-guard` (**Jev**, refusing) | **Breach** | HTTP 429, schema violated | **0.096697 USDC** to the caller: the 0.08 escrow refunded plus 0.02 slashed from the stake | [`0x586230ca…`](https://explorer.arc.io/tx/0x586230cac965d342ff09679ab5e1873098c133b231911ae82a0616e59d434c48) |
+| 11 | `payment-guard` (**Jev**, refusing) | **Breach** | HTTP 429, schema violated | **0.10 USDC** to the caller: the 0.08 escrow refunded plus 0.02 slashed from the stake | [`0x586230ca…`](https://explorer.arc.io/tx/0x586230cac965d342ff09679ab5e1873098c133b231911ae82a0616e59d434c48) |
 
 Order 8 is a model call settled by measurement: the verifier ran the Jev request,
 validated the returned probabilities against the covenant's schema, and the
@@ -182,7 +182,7 @@ The project also carries a live check the app performs on every read: `totalEscr
 
 VeriCall is not a generic escrow that happens to run on an EVM chain. Three properties of Arc are load-bearing:
 
-1. **USDC is the native asset and the gas token.** Every settlement is denominated and paid in the same 6-decimal currency, and the calling software never has to hold a second, volatile token to release a payment. A rebate of 0.035097 USDC costs about 0.0001 USDC in gas.
+1. **USDC is the native asset and the gas token.** Every settlement is denominated and paid in the same 6-decimal currency, and the calling software never has to hold a second, volatile token to release a payment. A rebate of 0.04 USDC costs about 0.0001 USDC in gas.
 2. **Deterministic sub-second finality.** An SLA measured in hundreds of milliseconds is only meaningful if settlement is not the slowest step. Arc finalises on inclusion, so the settlement of a 126 ms call is not waiting on confirmations.
 3. **A protocol-level USDC blocklist that reverts at runtime.** This one changes the contract's shape. On Arc, a transfer to or from a blocked address reverts — so a settlement that pays four recipients could be bricked by *one* of them being sanctioned, freezing the others' money. VeriCall therefore never pushes blindly: every payout is a low-level call whose failure becomes a claimable credit for that recipient, so one restricted address can never stop everyone else from being paid.
 
