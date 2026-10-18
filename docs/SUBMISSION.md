@@ -55,6 +55,7 @@ refusal and the covenant refunds the caller out of the provider's stake.
 | **Pass, attested by the live deployment** | 0.16 + 0.04, signed by the service at vericall.fly.dev | [`0xf648f251…`](https://explorer.arc.io/tx/0xf648f251650a7315d8c6f6a87126ceebbc0e3dbd03d0171eb548be816778ef7f) |
 | **Pass on a model call** (`intent-router`, Jev) | 0.04 to the provider, 0.01 to its dependency, 251 ms | [`0x6370fb2f…`](https://explorer.arc.io/tx/0x6370fb2f945fcda6cd6a36770bcc9c449d3d6ba8564ec2b51ba8936190cc4fa1) |
 | **Breach from a real model outage** (`payment-guard`, Jev) | the service hit its own rate limit and refused; 0.096697 refunded to the caller, 0.02 slashed from the stake | [`0x586230ca…`](https://explorer.arc.io/tx/0x586230cac965d342ff09679ab5e1873098c133b231911ae82a0616e59d434c48) |
+| **Pass on a third party's API** (`fx-rate`, ECB via Frankfurter) | 61 ms measured, 0.021 to the provider, 0.009 to its dependency — a call to a publisher this project does not control | [`0x5cccd30b…`](https://explorer.arc.io/tx/0x5cccd30b9bb91ded0d6d6cd462e7ecf9933c40be40a229855003c291b53d6388) |
 
 Nine mainnet settlements in total, across three wallets and five covenants — two
 deterministic services and two model-backed ones — with different prices, rates and

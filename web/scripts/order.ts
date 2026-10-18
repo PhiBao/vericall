@@ -22,6 +22,7 @@ import {
   type RequestRecord,
 } from "./lib/files.ts";
 import { explorerTx, network, reader, sendTransaction, signerFromEnv } from "./lib/chain.ts";
+import { recordEndpoint } from "./lib/fixtures.ts";
 import { CLEARINGHOUSE_ABI, ERC20_ABI, STATUS_NAME, USDC_ADDRESS } from "./lib/abi.ts";
 
 async function main() {
@@ -50,7 +51,7 @@ async function main() {
       purpose: "release a milestone payment",
       mode,
     });
-  const endpointUri = `${process.env.VERICALL_PUBLIC_BASE_URL ?? "http://localhost:8787"}${record.endpointUri.replace(/^https?:\/\/[^/]+/, "")}`;
+  const endpointUri = recordEndpoint(record.endpointUri, process.env.VERICALL_PUBLIC_BASE_URL ?? "http://localhost:8787");
   const requestHash = keccak256(toHex(`${endpointUri}\n${requestBody}`));
 
   section(`Escrowing a ${slug} call on ${net.label}`);

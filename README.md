@@ -70,7 +70,20 @@ outage is priced the same way a slow endpoint is**, which is the claim that make
 this more than a demo. The script says in its own output what was orchestrated
 (the outage) and what was the contract's own arithmetic (everything after it).
 
-### What nine calls did to three wallets
+### A third party's API, settled onchain
+
+| # | Service | Verdict | Measured | What the chain did | Transaction |
+| --- | --- | --- | --- | --- | --- |
+| 13 | `fx-rate` (**ECB via Frankfurter**) | **Pass** | **61 ms**, schema valid | 0.021 USDC → provider, 0.009 → dependency | [`0x5cccd30b…`](https://explorer.arc.io/tx/0x5cccd30b9bb91ded0d6d6cd462e7ecf9933c40be40a229855003c291b53d6388) |
+
+Order 13 is the one to open if the question is "is any of this real". The call went
+to `api.frankfurter.dev` — a publisher this project does not run, serving the
+European Central Bank's reference rate — and the settlement is the contract's
+response to what that publisher returned in 61 milliseconds. The endpoint, the
+schema and the price are in the covenant; the rate itself is whatever the ECB
+published that day.
+
+### What ten calls did to three wallets
 
 | Wallet | Role | Before | After | Change |
 | --- | --- | --- | --- | --- |

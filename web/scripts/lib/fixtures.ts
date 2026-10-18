@@ -70,6 +70,13 @@ export function fixture(slug: string): CovenantFixture {
   return found;
 }
 
+/** The URL a recorded covenant actually names, absolute or relative to the
+ * verifier's public base. */
+export function recordEndpoint(endpointUri: string, baseUrl: string): string {
+  if (/^https?:\/\//i.test(endpointUri)) return endpointUri;
+  return `${baseUrl.replace(/\/$/, "")}${endpointUri}`;
+}
+
 /** Shown in the UI and the README: what is actually behind each endpoint. */
 export function isModelBacked(f: CovenantFixture): boolean {
   return f.backedBy === "jev";

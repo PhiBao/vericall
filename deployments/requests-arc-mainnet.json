@@ -36,6 +36,24 @@
       "endpointUri": "https://vericall.fly.dev/mock/payment-guard",
       "requestHash": "0x937ee9c9db345391b07696e2835cf70ba5fb012c2c731918e98d65f04a416626",
       "createdAt": "2026-10-16T14:07:31.823Z"
+    },
+    {
+      "orderId": "12",
+      "slug": "fx-rate",
+      "mode": "normal",
+      "body": "{\"query\":\"USD/EUR reference rate\",\"mode\":\"normal\"}",
+      "endpointUri": "https://vericall.fly.dev/v1/latest?base=USD&symbols=EUR",
+      "requestHash": "0x820e0e445a73fb977438179bd07d1d714e5093bf022ffbeae4949934738b33af",
+      "createdAt": "2026-10-18T16:45:26.999Z"
+    },
+    {
+      "orderId": "13",
+      "slug": "fx-rate",
+      "mode": "normal",
+      "body": "{\"query\":\"USD/EUR reference rate\",\"mode\":\"normal\"}",
+      "endpointUri": "https://api.frankfurter.dev/v1/latest?base=USD&symbols=EUR",
+      "requestHash": "0x082132bb6d836e027665e164ba6b656c0b8aea1528bcad8a74ffb95b8b4eecf9",
+      "createdAt": "2026-10-18T16:46:30.223Z"
     }
   ]
 }

@@ -28,7 +28,7 @@ import {
 } from "./lib/files.ts";
 import { explorerTx, network, reader, sendTransaction, signerFromEnv } from "./lib/chain.ts";
 import { CLEARINGHOUSE_ABI, ERC20_ABI, STATUS_NAME, USDC_ADDRESS } from "./lib/abi.ts";
-import { formatDelta, formatUsdc } from "./lib/fixtures.ts";
+import { formatDelta, formatUsdc, recordEndpoint } from "./lib/fixtures.ts";
 import { execute, health } from "./lib/verifier.ts";
 import { encodeFunctionData, keccak256, toHex } from "viem";
 
@@ -89,7 +89,7 @@ async function main() {
   const summary: Record<string, unknown>[] = [];
   // The endpoint the covenant names. The request hash commits to this URI, so it
   // has to be the one the verifier will dial.
-  const endpointUri = `${process.env.VERICALL_PUBLIC_BASE_URL ?? "http://localhost:8787"}${record.endpointUri.replace(/^https?:\/\/[^/]+/, "")}`;
+  const endpointUri = recordEndpoint(record.endpointUri, process.env.VERICALL_PUBLIC_BASE_URL ?? "http://localhost:8787");
 
   const requests = (() => {
     try {

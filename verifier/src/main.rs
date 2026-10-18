@@ -1037,13 +1037,11 @@ async fn execute(State(app): State<App>, Json(req): Json<ExecuteRequest>) -> Res
     let method = fixture.http_method();
     let call = executor::CallRequest {
         url: url.clone(),
-        // A GET carries no body: for an external endpoint the body would be
-        // meaningless, and sending one can change what the publisher returns.
-        body: if matches!(method, executor::Method::Get) {
-            None
-        } else {
-            Some(body_verbatim.clone())
-        },
+        // The body is always carried for *hashing* — it is what the caller
+        // committed to onchain — but the executor only sends it on a POST, so a
+        // GET to a third-party endpoint stays a clean GET. Dropping it here would
+        // make the outcome's own request hash disagree with the order's.
+        body: Some(body_verbatim.clone()),
         method,
         headers: vec![("x-vericall-fixture".into(), fixture.slug.clone())],
         // Give the service enough room to answer at or past the hard edge; a
