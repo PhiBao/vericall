@@ -141,16 +141,27 @@ that is the mechanism working, not the demo failing.
 
 ## 3:20–3:50 — the build in Arc Studio
 
-Switch to the **Arc Studio** tab:
+Two ways to show it. The recorded video uses the first, because it is checkable rather than
+performative.
 
-- Show the session: the prompt that specified the settlement semantics, the generated
-  `VeriCallClearinghouse.sol`, the compile and test runs inside the workspace, and the workspace
-  preview.
-- Say the honest part: "Studio wrote and tested this on testnet. Everything a mainnet product needs
-  was built around that artefact — the deployment, the verifier, the app — and I wrote a second,
-  independent test suite against the contract Studio produced. It found a real bug: a covenant
-  whose grace latency equals its hard timeout divided by zero and reverted. That is fixed, with a
-  fuzz test over it."
+**From the terminal, with Circle's own CLI (used in the video):**
+
+```bash
+arc-studio sessions                 # the real session: app b3658244…, thread 074d46ed…
+arc-studio pull --paths "contracts/src/**" --out studio
+diff -u studio/contracts/src/*.sol contracts/src/*.sol
+```
+
+One hunk: the guard for a covenant whose grace latency equals its hard timeout. Say the honest
+part: "Studio wrote and tested this on testnet. Everything a mainnet product needs was built
+around that artefact — the deployment, the verifier, the app — and a second, independent Foundry
+suite found a real bug in the generated code: the degraded branch divided by a zero denominator
+and reverted every such call. This is the fix, and the only change between Studio's contract and
+the one on mainnet."
+
+**Or in the Studio UI,** if a viewer needs to see the workspace itself: open the app at
+`studio.arc.io/app/b3658244-…`, show the session, the generated `VeriCallClearinghouse.sol` and a
+test run in the workspace. Same narration.
 
 ## 3:50–4:20 — the parts that make it more than a demo
 
