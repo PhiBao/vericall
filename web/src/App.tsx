@@ -50,9 +50,9 @@ export function App() {
     }
   }, []);
 
-  const loadLedger = useCallback(async (signal?: AbortSignal): Promise<void> => {
+  const loadLedger = useCallback(async (signal?: AbortSignal, fresh = false): Promise<void> => {
     try {
-      setLedger(await getLedger(signal));
+      setLedger(await getLedger(signal, fresh));
       setLedgerError(null);
     } catch (cause) {
       if (signal?.aborted) return;
@@ -80,9 +80,16 @@ export function App() {
     return () => window.clearInterval(timer);
   }, [loadHealth, loadLedger]);
 
+  /**
+   * Re-read the chain, uncached.
+   *
+   * Everyone who calls this has just done something to the chain — escrowed a
+   * call, settled one, reclaimed one — which is exactly when the cached view is
+   * the wrong one.
+   */
   const refreshLedger = useCallback((): void => {
     setRefreshing(true);
-    void loadLedger().finally(() => setRefreshing(false));
+    void loadLedger(undefined, true).finally(() => setRefreshing(false));
   }, [loadLedger]);
 
   const chain = useChain(config);

@@ -3,7 +3,14 @@
 A shot list for the walkthrough video. The required content is: **the build in Arc Studio** and
 **the mainnet transaction**. Everything else exists to make those two credible.
 
-Total: about 4 minutes. Record at 1600×900 or larger; the tables need the width.
+The recorded video is [`assets/vericall-demo.mp4`](assets/vericall-demo.mp4). It was not filmed by
+hand: it is generated from the live app by the `~/demo-video-template` pipeline, which drives a real
+browser with [`web/tools/demo-wallet.ts`](../web/tools/demo-wallet.ts) standing in for a wallet
+extension and records the result with narration. This runbook is the narration and shot list behind
+it, and the script for a manual re-record or for walking a reviewer through the same ground live.
+
+Total: about two minutes as generated, four as a manual walkthrough. Record at 1600×900 or larger;
+the tables need the width.
 
 ---
 
@@ -40,8 +47,8 @@ No slides. Say it over the live page.
 
 Open **vericall.fly.dev**. Point at the strip under the headline before saying anything else:
 
-> "Eleven settled calls, four of the four outcomes the contract can reach, 1.54 USDC
-> through the contract, 0.4 staked against promises, and the invariant that catches an
+> "Sixteen settled calls, every outcome the contract can reach, 1.93 USDC
+> through the contract, 0.4075 staked against promises, and the invariant that catches an
 > accounting bug in either implementation. Every one of those numbers comes from the
 > contract's own storage, and each links to the transaction behind it."
 
@@ -147,10 +154,10 @@ Switch to the **Arc Studio** tab:
 
 ## 3:50–4:20 — the parts that make it more than a demo
 
-- Terminal: `node web/scripts/verify.ts --network arc-mainnet` → **35 checks, all passed**, no key.
+- Terminal: `node web/scripts/verify.ts --network arc-mainnet` → **41 checks, all passed**, no key, no write endpoint.
   "That is a judge's check, not mine: bytecode, every covenant term against the chain, every settled
   order's payouts reproducible from the covenant's own rates, and the money whole."
-- Point at the **dependency wallet**: `0.004 → 0.195 USDC`. "It started with dust. That is 48×, earned
+- Point at the **dependency wallet**: `0.004 → 0.268 USDC`. "It started with dust. That is 66×, earned
   entirely as per-call royalty splits on seven API calls — no invoice, no reconciliation, no
   custodian. Paying someone 3 cents out of a 15-cent call is impossible on card rails."
 

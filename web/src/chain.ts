@@ -16,9 +16,11 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  createPublicClient,
   createWalletClient,
   custom,
   defineChain,
+  encodeFunctionData,
   getAddress,
   isAddress,
   isHex,
@@ -264,6 +266,45 @@ export async function waitForReceipt(
   }
 }
 
+/** USDC's allowance, for the one check the interface makes before escrowing. */
+const ALLOWANCE_ABI = [
+  {
+    type: "function",
+    name: "allowance",
+    stateMutability: "view",
+    inputs: [
+      { name: "owner", type: "address" },
+      { name: "spender", type: "address" },
+    ],
+    outputs: [{ type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "approve",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "spender", type: "address" },
+      { name: "amount", type: "uint256" },
+    ],
+    outputs: [{ type: "bool" }],
+  },
+] as const;
+
+/** The one function the interface sends for itself, and nothing else. */
+const CREATE_ORDER_ABI = [
+  {
+    type: "function",
+    name: "createOrder",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "serviceId", type: "uint256" },
+      { name: "requestHash", type: "bytes32" },
+      { name: "ttlSeconds", type: "uint64" },
+    ],
+    outputs: [{ name: "orderId", type: "uint256" }],
+  },
+] as const;
+
 /* --------------------------------------------------------------- useWallet -- */
 
 export type WalletStatus =
@@ -291,6 +332,35 @@ export interface WalletController {
   disconnect: () => Promise<void>;
   switchToChain: () => Promise<void>;
   sendSettlement: (to: Address, data: Hash) => Promise<Hash>;
+  /**
+   * Escrow one call from the connected wallet.
+   *
+   * Starting a call is the caller's commitment: the request hash goes onchain
+   * before the call happens, which is what lets the verifier later prove it
+   * attested to the request the caller wrote down.
+   */
+  createOrder: (
+    to: Address,
+    serviceId: bigint,
+    requestHash: Hash,
+    ttlSeconds: bigint,
+  ) => Promise<Hash>;
+  /**
+   * Escrow one call, granting the allowance it needs first.
+   *
+   * `createOrder` pulls the price with `transferFrom`, so a wallet that has never
+   * used this contract has to approve it — and a product that makes the user work
+   * that out from a failed transaction is not finished. The allowance is read
+   * first so the approval is only sent when it is actually needed.
+   */
+  escrowCall: (args: {
+    contract: Address;
+    usdc: Address;
+    serviceId: bigint;
+    requestHash: Hash;
+    ttlSeconds: bigint;
+    price: bigint;
+  }) => Promise<{ approveHash: Hash | null; orderHash: Hash }>;
   waitForSettlement: (hash: Hash) => Promise<ArcReceipt | null>;
   clearError: () => void;
 }
@@ -482,6 +552,73 @@ export function useWallet(chain: Chain): WalletController {
     [provider],
   );
 
+  /**
+   * Escrow one call, from the connected wallet.
+   *
+   * The request hash goes onchain before the call happens — that is the caller's
+   * commitment, and it is what lets the verifier later prove it attested to the
+   * request the caller wrote down rather than one chosen afterwards. Everything
+   * else (the chain check, the fee floors) is the same path as a settlement.
+   */
+  const createOrder = useCallback(
+    async (to: Address, serviceId: bigint, requestHash: Hash, ttlSeconds: bigint): Promise<Hash> => {
+      const data = encodeFunctionData({
+        abi: CREATE_ORDER_ABI,
+        functionName: "createOrder",
+        args: [serviceId, requestHash, ttlSeconds],
+      });
+      return sendSettlement(to, data);
+    },
+    [sendSettlement],
+  );
+
+  const escrowCall = useCallback(
+    async (args: {
+      contract: Address;
+      usdc: Address;
+      serviceId: bigint;
+      requestHash: Hash;
+      ttlSeconds: bigint;
+      price: bigint;
+    }): Promise<{ approveHash: Hash | null; orderHash: Hash }> => {
+      const injected = provider;
+      if (!injected) throw new Error("no wallet provider is available in this browser");
+      if (!address) throw new Error("connect a wallet before funding a call");
+
+      const reader = createPublicClient({ chain, transport: custom(injected) });
+      const allowance = (await reader.readContract({
+        address: args.usdc,
+        abi: ALLOWANCE_ABI,
+        functionName: "allowance",
+        args: [address, args.contract],
+      })) as bigint;
+
+      let approveHash: Hash | null = null;
+      if (allowance < args.price) {
+        approveHash = await sendSettlement(
+          args.usdc,
+          encodeFunctionData({
+            abi: ALLOWANCE_ABI,
+            functionName: "approve",
+            args: [args.contract, (1n << 256n) - 1n],
+          }),
+        );
+        // The escrow must not race the approval: Arc finalises on inclusion, so
+        // waiting for the receipt is cheap and removes the ordering question.
+        await waitForReceipt(injected, approveHash);
+      }
+
+      const orderHash = await createOrder(
+        args.contract,
+        args.serviceId,
+        args.requestHash,
+        args.ttlSeconds,
+      );
+      return { approveHash, orderHash };
+    },
+    [provider, address, chain, sendSettlement, createOrder],
+  );
+
   const clearError = useCallback((): void => setError(null), []);
 
   const onSettlementChain = chainId === chain.id;
@@ -496,6 +633,8 @@ export function useWallet(chain: Chain): WalletController {
       chain,
       connect,
       disconnect,
+      createOrder,
+      escrowCall,
       switchToChain,
       sendSettlement,
       waitForSettlement,
@@ -510,6 +649,8 @@ export function useWallet(chain: Chain): WalletController {
       chain,
       connect,
       disconnect,
+      createOrder,
+      escrowCall,
       switchToChain,
       sendSettlement,
       waitForSettlement,

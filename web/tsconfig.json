@@ -29,6 +29,8 @@
     "scripts"
   ],
   "exclude": [
-    "scripts/test-wallet.ts"
+    "scripts/test-wallet.ts",
+    "scripts/test-settle-ui.ts",
+    "tools"
   ]
 }

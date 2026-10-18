@@ -167,8 +167,11 @@ export const getHealth = (signal?: AbortSignal): Promise<Health> =>
 export const getConfig = (signal?: AbortSignal): Promise<PublicConfig> =>
   request<PublicConfig>("/api/config", { signal });
 
-export const getLedger = (signal?: AbortSignal): Promise<LedgerView> =>
-  request<LedgerView>("/api/ledger", { signal });
+export const getLedger = (signal?: AbortSignal, fresh = false): Promise<LedgerView> =>
+  // `fresh` is for the moments after this browser changed the chain itself —
+  // escrowing an order, settling one. Everywhere else the cache is a courtesy;
+  // there it is the difference between seeing your own transaction and not.
+  request<LedgerView>(fresh ? "/api/ledger?fresh=1" : "/api/ledger", { signal });
 
 export interface QuoteRequest {
   /** A built-in fixture slug. Supply either this or `terms`, never both. */
@@ -199,6 +202,14 @@ export interface ExecuteRequest {
    * a measurement and nothing to settle.
    */
   order_id?: string;
+  /**
+   * The request body exactly as the caller committed it onchain.
+   *
+   * Required when attesting to an order: the verifier refuses to sign unless the
+   * bytes it is about to send hash to the order's own commitment, which is what
+   * stops a caller pointing an order at a request it never wrote down.
+   */
+  body_raw?: string;
 }
 
 export async function postExecute(

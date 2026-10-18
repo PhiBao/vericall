@@ -45,7 +45,9 @@ function check(condition: boolean, description: string, detail = ""): void {
 
 async function main() {
   const key = (arg("network", "arc-mainnet") ?? "arc-mainnet") as "arc-mainnet" | "arc-testnet";
-  const net = network(key);
+  // Read-only on purpose: a judge should be able to check every claim against a
+  // public endpoint, holding no key and no endpoint that could spend.
+  const net = network(key, { readOnly: true });
   const deployment = loadDeployment(key);
   const client = reader(net);
 

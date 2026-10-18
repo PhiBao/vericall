@@ -25,6 +25,21 @@ A caller escrows the price. A verifier executes the call for real, measures it, 
 
 The rebate is not a policy decision made by a human after the fact. It is arithmetic in the contract, and `quoteSettlement` will tell you the exact outcome for a latency *before* you agree to it.
 
+## The walkthrough
+
+[`docs/assets/vericall-demo.mp4`](docs/assets/vericall-demo.mp4) — two minutes, no slides:
+
+| Beat | What it shows |
+| --- | --- |
+| 0:00 | The problem: software pays software in advance and has no recourse |
+| 0:15 | The live app on Arc mainnet. A real call to `api.frankfurter.dev` — the ECB's reference rate, a publisher this project does not run — measured at 196 ms and checked against the covenant's schema |
+| 0:50 | The settlement curve: what a given overrun costs, with the covenant's own settled calls plotted on it |
+| 1:05 | The ledger: every order, its verdict, its three-way split, and a link to the transaction |
+| 1:25 | **The loop from the browser**: the request written, escrowed from a wallet, run, attested, and settled onchain — ending on the receipt and the hash |
+| 1:55 | `verify.ts`: 41 checks against the chain, no key, no spending |
+
+The narration is what the interface is doing, not what it might do: every figure on screen is read from the contract or measured during the take. It was recorded against a local instance of the deployed build — the same binary and the same front-end bundle, reading Arc mainnet — because the recorder drives the page itself.
+
 ## Proof: real USDC on Arc mainnet
 
 Every row below is a real Arc mainnet transaction against the deployed contract. The caller, the provider and the upstream dependency are three distinct wallets; the money really moved. Two covenants are exercised, with different prices, different rates and different splits — **80/20** and **70/30**.
@@ -83,15 +98,42 @@ response to what that publisher returned in 61 milliseconds. The endpoint, the
 schema and the price are in the covenant; the rate itself is whatever the ECB
 published that day.
 
-### What ten calls did to three wallets
+### The whole loop from the browser, with a wallet the build never used
 
-| Wallet | Role | Before | After | Change |
+| # | Service | Verdict | Measured | What the chain did | Transaction |
+| --- | --- | --- | --- | --- | --- |
+| 23 | `fx-rate` | **Pass** | 166 ms, schema valid | 0.021 USDC → provider, 0.009 → dependency | [`0xd0815a54…`](https://explorer.arc.io/tx/0xd0815a54949866cc584f97c28281c2bc2e873d8fb5f6f63591d67582ccf36c95) |
+| 24 | `fx-rate` | **Pass** | 156 ms, schema valid | 0.021 USDC → provider, 0.009 → dependency | [`0xb118721f…`](https://explorer.arc.io/tx/0xb118721f76f11c553b042a349566ded9e686b9c18322d1fb9217126746ddd615) |
+| 25 | `fx-rate` | **Pass** | 146 ms, schema valid | 0.021 USDC → provider, 0.009 → dependency | [`0x718bef04…`](https://explorer.arc.io/tx/0x718bef04f9f35d6145c546d67ddb8ecce8c48ad046e92012e320221017acf7e8) |
+
+These three were not settled by a script. Each was created, executed and settled
+from [vericall.fly.dev](https://vericall.fly.dev) by `0xDbFe…e349` — a fourth
+wallet that appears nowhere else in the build, funded for the purpose. The app
+writes the request, grants the USDC allowance the escrow needs, sends
+`createOrder` from the connected wallet, waits for Arc to show the order, runs
+the call through the verifier, and sends the settlement the verifier signed.
+Order 25 is the settlement on camera in the walkthrough video.
+
+What this proves, and what it does not: the wallet is ours and so is the money,
+so it is not evidence of outside demand — no stranger has bought a call yet. It
+does show the product's own path working for an address with no history against
+the contract: no allowance, no state, no scripts, one browser.
+
+### What the calls did to four wallets
+
+| Wallet | Role | Started with | Holds now | What moved |
 | --- | --- | --- | --- | --- |
-| [`0x4AB5…e555`](https://explorer.arc.io/address/0x4AB5e7F2b5464B9494b49EFE41C2f00e7bcfE555) | caller | 1.300 USDC | 0.141 USDC | **−1.159** — paid for nine calls and their gas, and got two of them back: this is the customer |
-| [`0x15AB…ac4b`](https://explorer.arc.io/address/0x15AB8109378736FA1C1C401175d375DB9b1dAC4B) | provider | 0.300 USDC | 0.503 USDC | **+0.203** — revenue from settled calls, less the stake it put behind them and the penalties it paid |
-| [`0x0382…1e67`](https://explorer.arc.io/address/0x0382bca3Fc934169a43c7ebe1Ee4B4d6A69C1e67) | upstream dependency | 0.004 USDC | 0.195 USDC | **+0.191**, a 48× increase, earned entirely as per-call royalty splits |
+| [`0x4AB5…e555`](https://explorer.arc.io/address/0x4AB5e7F2b5464B9494b49EFE41C2f00e7bcfE555) | caller | 1.300 USDC | 0.074 USDC | Paid for every order it opened and their gas; received two rebates and three breach refunds in full; moved 0.150 to the fourth wallet used in the video, so this column is not a profit and loss |
+| [`0x15AB…ac4b`](https://explorer.arc.io/address/0x15AB8109378736FA1C1C401175d375DB9b1dAC4B) | provider | 0.300 USDC | 0.607 USDC | Revenue from sixteen settled calls, less the 0.4075 it has staked behind six covenants and the penalties three breaches cost it |
+| [`0x0382…1e67`](https://explorer.arc.io/address/0x0382bca3Fc934169a43c7ebe1Ee4B4d6A69C1e67) | upstream dependency | 0.004 USDC | 0.268 USDC | **66×**, earned entirely as per-call royalty splits — it has no other source of income |
+| [`0xDbFe…e349`](https://explorer.arc.io/address/0xDbFe5c4d0256D2459bB216caB905999Ca41bE349) | the interface's own wallet | 0.350 USDC | 0.092 USDC | Funded once by the operator. Bought six calls entirely through the browser and paid their gas; four orders left mid-test were reclaimed after their windows closed |
 
-The dependency's row is the product thesis in one line. It started with dust and holds 0.19 USDC now, because every successful call that used it paid it 20%, 25% or 30% of the price in the same transaction that paid the provider — no invoice, no monthly reconciliation, no custodian. Paying a contributor a 0.03 USDC share of a 0.15 USDC call is impossible on card rails and uneconomic on most chains; here it cost about 0.0001 USDC to include.
+The dependency's row is the product thesis in one line. It started with dust and
+holds 0.268 USDC now, because every successful call that used it paid it 20%, 25%
+or 30% of the price in the same transaction that paid the provider — no invoice,
+no monthly reconciliation, no custodian. Paying a contributor a 0.03 USDC share of
+a 0.15 USDC call is impossible on card rails and uneconomic on most chains; here it
+cost about 0.0001 USDC to include.
 
 ### The transactions are found from the chain, not remembered
 
@@ -112,7 +154,7 @@ go to the original caller, and it needs nobody's cooperation:
 So the contract has been exercised on all four of its terminal outcomes — paid out,
 rebated, refunded with a penalty, and reclaimed — with real money, and the final
 state holds no floating escrow at all: `totalEscrowed()` is zero and the only USDC
-inside the contract is the 0.3975 staked across the five active covenants.
+inside the contract is the 0.4075 staked across the six active covenants.
 
 ### Verified independently, without a key
 
@@ -120,7 +162,14 @@ inside the contract is the 0.3975 staked across the five active covenants.
 node scripts/verify.ts --network arc-mainnet
 ```
 
-31 checks, no wallet, no spending: the bytecode exists at the recorded address, each covenant matches the chain term-for-term including the split table and the schema commitment, each settled order's recorded payouts are reproducible from the covenant's own rates, and the contract's balance is never less than the escrow and bonds it owes. The same script passes on Arc testnet.
+41 checks, no wallet, no key, no spending — and no endpoint that could spend: the
+checker asks for the public read endpoint and never for a write one. It verifies
+that the bytecode exists at the recorded address, that each covenant matches the
+chain term-for-term including the split table and the schema commitment, that each
+settled order's recorded payouts are reproducible from the covenant's own rates,
+and that the contract's balance is never less than the escrow and bonds it owes.
+It grows with the chain: every settled order adds a check. The same script passes
+on Arc testnet.
 
 The project also carries a live check the app performs on every read: `totalEscrowed()` must equal the sum of funded orders' escrow. When a settlement is in flight the two disagree for as long as it takes Arc to include the next block — under a second.
 
@@ -171,13 +220,13 @@ the verifier measures the refusal, the schema check fails, and the covenant
 refunds the caller out of the provider's stake. That is demonstrated, not
 asserted — see below.
 
-### The five moving parts
+### The moving parts
 
 | Part | Where | What it is |
 | --- | --- | --- |
 | **Clearinghouse** | `contracts/` | `VeriCallClearinghouse.sol` — covenants, escrowed orders, the settlement arithmetic, bond accounting, the blocklist-safe payout path, and the EIP-712 verification of attestations. Authored and tested in Arc Studio. |
 | **Verifier** | `verifier/` | A Rust service that executes real HTTP calls, measures latency against a monotonic clock, validates responses against the covenant's JSON schema, quotes the settlement, and signs EIP-712 attestations. It holds no funds and — in the live deployment — a key whose only power is to attest. |
-| **App** | `web/src/` | A React front end that reads the chain directly, runs live calls through the verifier, draws the settlement curve, and settles from a connected wallet. Useful with no wallet at all: the proof ledger is read-only. |
+| **App** | `web/src/` | A React front end that reads the chain directly, escrows a call from a connected wallet, runs live calls through the verifier, draws the settlement curve, and settles from the browser. Useful with no wallet at all: the proof ledger is read-only. |
 | **Operator scripts** | `web/scripts/` | `deploy`, `plan-covenants`, `register`, `order`, `settle`, `bond`, `reclaim`, `verify` — every step of the lifecycle, each printing the explorer link and the fee it spent. |
 | **Records** | `deployments/` | What actually exists onchain: contract addresses, transaction hashes, block numbers, and the covenant terms as registered, so any step can be reproduced and any claim checked. |
 | **Service definitions** | `fixtures/services.json` | One source of truth for every published service. The Rust verifier embeds it and the tooling reads it, so the terms a covenant is registered with are the terms the verifier prices against, and the schema it validates against is the schema that was committed onchain. |
@@ -224,9 +273,9 @@ Built for **Arc Microgrants: Built with Arc Studio** (Circle, October 2026).
 
 | Criterion | Weight | How this submission answers it |
 | --- | --- | --- |
-| Real USDC moving on Arc mainnet | 30% | **Nine** mainnet settlements across three distinct wallets and five covenants, covering every verdict the contract can reach — pass, degraded, breach and a pass attested by the live public verifier — each with a transaction hash and the exact amounts above. |
+| Real USDC moving on Arc mainnet | 30% | **Sixteen settlements and nine permissionless reclaims**, across four wallets and six covenants, covering every outcome the contract can reach — eleven passes, two linear rebates, three breaches refunded with a bond penalty, and nine expired orders returned to their callers. Each has a transaction hash and its exact amounts above. |
 | Use of Arc Studio across the build | 25% | The contract, its Foundry test suite and its README were written, iterated and tested inside Arc Studio — workspace [`studio.arc.io/app/b3658244-c47e-4bb9-b1c5-3b34acc595cc`](https://studio.arc.io/app/b3658244-c47e-4bb9-b1c5-3b34acc595cc). Mainnet deployment, the verifier and the app were then built around that artefact; a second Studio turn built the in-workspace frontend. |
-| A working product | 25% | [vericall.fly.dev](https://vericall.fly.dev) — the app and the verifier in one process, serving a proof ledger that reads Arc mainnet over three independent RPC endpoints and a workbench that runs real calls and draws the settlement curve. Useful with no wallet at all; the one settlement in the table above that names the live verifier is the proof that path works. |
+| A working product | 25% | [vericall.fly.dev](https://vericall.fly.dev) — the app and the verifier in one process, serving a proof ledger that reads Arc mainnet over three independent RPC endpoints and a workbench that runs real calls, draws the settlement curve and lets a wallet escrow, run and settle a call without leaving the page. Useful with no wallet at all; orders 23–25 above were each produced by that loop. |
 | Potential to go further | 20% | The covenant is a general instrument: metered SaaS billing, agent-to-agent task settlement, and dependency royalties are the same primitive with different terms. A path into the Circle Grant Program is sketched under *Roadmap*. |
 
 All three of the microgrant's suggested directions are one product here: **software-to-software payments**, **escrow and conditional payouts**, and **payment splitting with shared treasuries**.
@@ -258,7 +307,7 @@ forge test --gas-report   # settleOrder ≈ 150k gas
 
 ```bash
 cd verifier
-cargo test                # 58 tests
+cargo test                # 69 tests
 cargo build --release     # produces ../target/release/vericall
 ```
 
@@ -310,6 +359,28 @@ un-authorise itself, and wallets that do not implement `wallet_revokePermissions
 return an error rather than honouring it. The button says so in its tooltip, the
 local session clears either way, and the test asserts both.
 
+### The whole loop, through the interface
+
+```bash
+cd web
+pnpm wallet           # a loopback EIP-1193 provider, signing for one contract only
+pnpm test:settle-ui   # connect → write a request → escrow → run → settle → receipt
+```
+
+Every other test settles from the command line. This one is the product's own
+path: the browser connects a wallet, writes the request, takes the USDC allowance
+the escrow needs, sends `createOrder`, waits for Arc to show the order, runs the
+call, sends the signed settlement, and waits for the receipt to come back before
+claiming anything.
+
+`tools/demo-wallet.ts` is what makes that possible without a wallet extension in
+the way: a loopback EIP-1193 provider that answers account and chain questions
+itself, proxies reads to Arc, and signs `eth_sendTransaction` for two things only
+— calls to the clearinghouse, and USDC `approve`. It refuses every other target
+and every other USDC call, so a stray request cannot move funds elsewhere, and it
+listens on loopback only. It is a recording and testing harness, not part of the
+product.
+
 ### Pricing an outage
 
 ```bash
@@ -340,9 +411,10 @@ Every script prints the explorer link, the gas used and the fee in USDC. `--dry-
 
 ### Reading the chain without making a judge wait
 
-The ledger is a read-mostly view: nine covenants, eleven orders, three balances and
-an event scan, which is about thirty RPC calls. Serially that took the better part
-of a minute on Arc's public endpoints, so three things changed:
+The ledger is a read-mostly view: twenty-five orders with their transactions, six
+active covenants, four balances and an event scan, which is several hundred RPC
+calls. Serially that took the better part of a minute on Arc's public endpoints, so
+three things changed:
 
 * reads go out concurrently, bounded to eight at a time so the burst stays polite;
 * the covenant's split table comes from `getService` rather than a second
@@ -353,6 +425,12 @@ of a minute on Arc's public endpoints, so three things changed:
 A warm read is now ~0.2 s from the deployed region, and a cold start warms itself
 at boot. A judge never waits on a log scan, and a row whose transaction has not
 been indexed yet says so rather than pretending the transaction does not exist.
+
+One case is deliberately not cached: `GET /api/ledger?fresh=1` does the read
+before it answers. The cache is right for a browser that is watching, and wrong
+for a caller that has just changed the chain — after escrowing an order, the
+interface polls for its own commitment until it appears, because a caller should
+never have to reload a page to see money they just committed.
 
 ### The live deployment
 
@@ -396,7 +474,8 @@ Being precise about this matters more than the claim it protects.
 | --- | --- |
 | The three published services | `risk-scorer`, `invoice-parser` and `ast-auditor` are deterministic HTTP services hosted by the verifier so the whole path can be demonstrated without depending on someone else's API and network. They are real endpoints over real HTTP with real, *deliberate* latency; they are not third-party APIs. Their responses are fixed, and their `mode` parameter injects a latency or a schema violation so each verdict can be produced on demand. |
 | The latency values in the demo | Injected by those services on request (`normal`, `degraded`, `breach`), because a demo that depends on a real network's jitter is not a demo. The measurement of them is entirely real. |
-| Third-party demand | No external customer has used VeriCall. The wallets are ours. |
+| The wallet in the walkthrough video | A loopback provider (`web/tools/demo-wallet.ts`) signs in place of a browser extension, so the recording does not fight a wallet popup. The transactions it signs are ordinary mainnet transactions, signed by one key for one contract; orders 23–25 are its work. |
+| Third-party demand | No external customer has used VeriCall. All four wallets are funded by the operator, and the fourth is the interface's own. |
 
 Nothing in the product's claims depends on a simulated component behaving like a real one: pointing a covenant at any HTTP endpoint is a one-line change to its `endpointUri`, and the verifier's executor refuses to call anything other than the registered URI.
 
@@ -443,8 +522,9 @@ Guards against the first two are in *Roadmap*; the third is bounded by design an
 
 | Document | What it is for |
 | --- | --- |
+| [`docs/assets/vericall-demo.mp4`](docs/assets/vericall-demo.mp4) | The two-minute walkthrough: the live app, a real third-party call, the settlement curve, the ledger, a call escrowed and settled from the browser, and the independent check |
 | [`docs/SUBMISSION.md`](docs/SUBMISSION.md) | The links, the transactions and the honest real-versus-simulated split, in submission order |
-| [`docs/DEMO-RUNBOOK.md`](docs/DEMO-RUNBOOK.md) | A shot list for the walkthrough video, timed, with the narration that matters |
+| [`docs/DEMO-RUNBOOK.md`](docs/DEMO-RUNBOOK.md) | The shot list and narration behind the video, so it can be re-recorded after a change |
 | `docs/assets/` | The two diagrams above, as SVG |
 
 ## Repository map
@@ -454,8 +534,9 @@ contracts/            VeriCallClearinghouse.sol, Foundry suite, abi-lock.json
 verifier/             Rust: SLA math, EIP-712, executor, schema validator, HTTP API
 web/src/              React app: payoff curve, live execution, proof ledger
 web/scripts/          deploy · plan-covenants · register · order · settle · bond · reclaim · verify
+web/tools/            A loopback EIP-1193 wallet, for testing and recording the interface
 deployments/          The onchain record: addresses, hashes, blocks, registered terms
-docs/assets/          Diagrams
+docs/assets/          Diagrams, and the walkthrough video
 Dockerfile, fly.toml  The live deployment
 ```
 

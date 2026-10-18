@@ -54,6 +54,15 @@
       "endpointUri": "https://api.frankfurter.dev/v1/latest?base=USD&symbols=EUR",
       "requestHash": "0x082132bb6d836e027665e164ba6b656c0b8aea1528bcad8a74ffb95b8b4eecf9",
       "createdAt": "2026-10-18T16:46:30.223Z"
+    },
+    {
+      "orderId": "14",
+      "slug": "fx-rate",
+      "mode": "normal",
+      "body": "{\"query\":\"USD/EUR reference rate\",\"mode\":\"normal\"}",
+      "endpointUri": "https://api.frankfurter.dev/v1/latest?base=USD&symbols=EUR",
+      "requestHash": "0x082132bb6d836e027665e164ba6b656c0b8aea1528bcad8a74ffb95b8b4eecf9",
+      "createdAt": "2026-10-18T17:20:58.231Z"
     }
   ]
 }

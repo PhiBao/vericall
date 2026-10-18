@@ -18,6 +18,7 @@ the promise is missed.**
 | --- | --- |
 | **Arc Studio project** | https://studio.arc.io/app/b3658244-c47e-4bb9-b1c5-3b34acc595cc |
 | **Live app** | https://vericall.fly.dev |
+| **Walkthrough video** | [`docs/assets/vericall-demo.mp4`](assets/vericall-demo.mp4) — two minutes, recorded against a local instance of the deployed build, settling a real order on mainnet |
 | **Public repository** | https://github.com/PhiBao/vericall |
 | **Builder profile** | https://github.com/PhiBao |
 | **Contract (Arc mainnet)** | [`0xb980fa2a21b09a7304da285187f67daf55600619`](https://explorer.arc.io/address/0xb980fa2a21b09a7304da285187f67daf55600619) |
@@ -56,10 +57,12 @@ refusal and the covenant refunds the caller out of the provider's stake.
 | **Pass on a model call** (`intent-router`, Jev) | 0.04 to the provider, 0.01 to its dependency, 251 ms | [`0x6370fb2f…`](https://explorer.arc.io/tx/0x6370fb2f945fcda6cd6a36770bcc9c449d3d6ba8564ec2b51ba8936190cc4fa1) |
 | **Breach from a real model outage** (`payment-guard`, Jev) | the service hit its own rate limit and refused; 0.096697 refunded to the caller, 0.02 slashed from the stake | [`0x586230ca…`](https://explorer.arc.io/tx/0x586230cac965d342ff09679ab5e1873098c133b231911ae82a0616e59d434c48) |
 | **Pass on a third party's API** (`fx-rate`, ECB via Frankfurter) | 61 ms measured, 0.021 to the provider, 0.009 to its dependency — a call to a publisher this project does not control | [`0x5cccd30b…`](https://explorer.arc.io/tx/0x5cccd30b9bb91ded0d6d6cd462e7ecf9933c40be40a229855003c291b53d6388) |
+| **Pass, escrowed and settled from the app itself** (`fx-rate`) | 146 ms measured, 0.021 to the provider, 0.009 to its dependency — the whole loop in the browser, from a wallet that had never touched the contract. Orders 23 and 24 are two more of the same, at 166 ms and 156 ms | [`0x718bef04…`](https://explorer.arc.io/tx/0x718bef04f9f35d6145c546d67ddb8ecce8c48ad046e92012e320221017acf7e8) |
 
-Nine mainnet settlements in total, across three wallets and five covenants — two
-deterministic services and two model-backed ones — with different prices, rates and
-splits. `README.md` lists all nine with the exact amounts.
+Sixteen settlements and nine permissionless reclaims in total, across four wallets
+and six covenants — three deterministic services, two model-backed ones and one
+that belongs to somebody else — with different prices, rates and splits.
+`README.md` lists them with the exact amounts.
 
 The outage settlement is worth reading closely: `scripts/demo-outage.ts` spends the
 service's own per-minute model budget until it starts refusing calls, then settles
@@ -89,30 +92,37 @@ response bytes actually received); the EIP-712 signatures (recovered onchain by 
 chain reads in the app (raced across three independent RPC endpoints, with the answering endpoint
 shown); and the transaction hashes in the ledger (scanned from the contract's own events).
 
-**Not real, and labelled as such in the UI and the README:** three of the five published services
-are deterministic HTTP endpoints hosted by the verifier, so the settlement arithmetic can be
+**Not real, and labelled as such in the UI and the README:** three of the six published covenants
+name deterministic HTTP endpoints hosted by the verifier, so the settlement arithmetic can be
 exercised without depending on a third party's API and network. They are real endpoints over real
-HTTP with real, deliberately injected latency. The other two are real model calls. No external
-customer has used VeriCall; the three wallets are ours.
+HTTP with real, deliberately injected latency. Two are real model calls, and one is a real third
+party's API. No external customer has used VeriCall; all four wallets are funded by the operator,
+and the fourth exists to exercise the interface. The walkthrough video signs through a loopback
+provider instead of a wallet extension, so the recording does not fight a popup; the transactions it
+signs are ordinary mainnet transactions, signed by one key, for one contract.
 
 ## What a reviewer should try first
 
 1. Open **https://vericall.fly.dev** — no wallet needed. The proof ledger reads Arc mainnet live:
-   the invariant check, the seven settled orders with their transaction links, the balances of the
-   three wallets, and each covenant's published terms including the bond it has staked.
+   the invariant check, every settled order with its transaction link, the balances of the four
+   wallets, and each covenant's published terms including the bond it has staked.
 2. Scroll to **Live call**, choose a mode, and press **Run call**. The verifier executes the
    registered endpoint, measures it, validates the response, and the telemetry trace shows each
    step — request hash, measured latency, schema result, the exact quote, and the `settleOrder`
    payload it would sign. Nothing is simulated; the call really happens.
 3. Drag the **payoff curve** slider to see what any latency would cost.
-4. Run the independent checks:
+4. With a wallet and a few cents of USDC: **Start a call** writes a request, escrows it onchain,
+   runs it and settles it from the same page. That is the loop orders 23–25 came from, and the
+   loop the video ends on.
+5. Run the independent checks:
    ```
-   node web/scripts/verify.ts --network arc-mainnet     # 31 checks, no key, no spending
+   node web/scripts/verify.ts --network arc-mainnet     # 41 checks, no key, no spending
    cd web && pnpm test:wallet                           # 11 checks against a stubbed wallet
+   cd web && pnpm wallet & pnpm test:settle-ui          # the whole loop, in a real browser
    ```
-5. Read the contract's rules in `contracts/src/VeriCallClearinghouse.sol` and the arithmetic that
+6. Read the contract's rules in `contracts/src/VeriCallClearinghouse.sol` and the arithmetic that
    prices a millisecond in `verifier/src/sla.rs`, which is asserted equal to the Solidity in tests.
-6. Connect a wallet: it lands on Arc in one action, and Disconnect clears the session and asks the
+7. Connect a wallet: it lands on Arc in one action, and Disconnect clears the session and asks the
    wallet to drop the page's account permission where its API allows that.
 
 ## Tracks

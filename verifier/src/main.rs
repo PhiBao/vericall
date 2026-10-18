@@ -33,7 +33,7 @@ mod sla;
 mod state;
 
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
     routing::{get, post},
@@ -370,6 +370,10 @@ struct FixturePublic {
     endpoint: Option<String>,
     /// `GET` or `POST`, so the interface can describe the call accurately.
     method: String,
+    /// The request this service is asked for by default. Shown in the interface
+    /// so a caller starts from something that works, and so the request the app
+    /// commits onchain is one it can actually send.
+    sample_request: String,
     /// `deterministic` or `jev`. Shown in the UI, because "this endpoint is a
     /// model call" changes what a latency promise means.
     backed_by: String,
@@ -399,6 +403,8 @@ async fn get_config(State(app): State<App>) -> Response {
             summary: f.summary.clone(),
             endpoint: f.endpoint.clone(),
             method: f.method.clone(),
+            sample_request: serde_json::to_string(&default_body(&f.slug, None, None))
+                .unwrap_or_else(|_| "{}".to_string()),
             backed_by: f.backed_by.clone(),
             backing: f.backing.clone(),
             price_usdc: f.price_usdc.clone(),
@@ -464,7 +470,37 @@ async fn build_ledger(app: &App) -> Option<state::LedgerView> {
     }
 }
 
-async fn ledger(State(app): State<App>) -> Response {
+#[derive(serde::Deserialize, Default)]
+struct LedgerQuery {
+    /// Ask for a read that cannot come from the cache.
+    ///
+    /// The cache is right for a browser that is watching, and wrong for a caller
+    /// who has just changed the chain: after escrowing an order the interface has
+    /// to be able to see it, otherwise the order it just created looks missing and
+    /// the run that follows cannot be attested to.
+    fresh: Option<String>,
+}
+
+async fn ledger(State(app): State<App>, Query(query): Query<LedgerQuery>) -> Response {
+    let fresh = matches!(query.fresh.as_deref(), Some("1") | Some("true"));
+
+    if fresh {
+        // The caller asked for the chain, so it gets the chain: no stale copy, no
+        // background refresh, the read happens before the answer does.
+        return match build_ledger(&app).await {
+            Some(view) => {
+                app.ledger_cache.put(view.clone()).await;
+                Json(view).into_response()
+            }
+            // A browser watching the chain is better served by a stale answer than
+            // by an error, so the last good view stands in for a failed read.
+            None => match app.ledger_cache.get().await {
+                Some(stale) => Json(stale).into_response(),
+                None => problem(StatusCode::BAD_GATEWAY, "could not read the ledger from Arc"),
+            },
+        };
+    }
+
     // A fresh-enough answer is the answer.
     if let Some(age) = app.ledger_cache.age().await {
         if age < LEDGER_TTL {
@@ -1333,6 +1369,12 @@ fn default_body(slug: &str, mode: Option<&str>, seed: Option<u64>) -> serde_json
         }),
         // The model-backed services take real input, not a mode switch: the
         // latency you get is the latency the model takes.
+        "fx-rate" => serde_json::json!({
+            // The endpoint ignores a body; this is the caller's stated intent,
+            // and it is what the request hash commits to.
+            "query": "USD/EUR reference rate",
+            "purpose": "price a euro invoice before releasing payment"
+        }),
         "intent-router" => serde_json::json!({
             "instruction": "Pay the hosting invoice for 126 EUR to Nordwind before the 1st, and share it 70/30 with the design studio"
         }),

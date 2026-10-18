@@ -69,29 +69,33 @@ export interface Network {
 }
 
 /**
- * Resolve a writable endpoint from the environment.
+ * Resolve a network by key.
  *
  * The variable names are checked against the network so a mainnet deploy can
  * never quietly borrow a testnet endpoint because the last run exported it —
  * the mistake is expensive rather than merely embarrassing.
+ *
+ * `writeRpc` is what a script that moves money needs. `verify` does not move
+ * anything, and a judge checking the chain should not have to hold an endpoint
+ * that can spend, so it asks for `readOnly` and gets the public read endpoint.
  */
-export function network(key: NetworkKey): Network {
+export function network(key: NetworkKey, options: { readOnly?: boolean } = {}): Network {
   const testnet = key === "arc-testnet";
   const writeRpc =
     (testnet ? process.env.ARC_TESTNET_WRITE_RPC : process.env.ARC_MAINNET_WRITE_RPC) ??
     (testnet ? process.env.HOROS_RPC_URL_TESTNET : process.env.HOROS_RPC_URL_MAINNET) ??
     "";
 
-  if (!writeRpc) {
+  if (!writeRpc && !options.readOnly) {
     throw new Error(
       `No writable RPC for ${key}. Set ${testnet ? "ARC_TESTNET_WRITE_RPC" : "ARC_MAINNET_WRITE_RPC"} ` +
         `(or HOROS_RPC_URL_${testnet ? "TESTNET" : "MAINNET"}) to an endpoint that accepts eth_sendRawTransaction.`,
     );
   }
-  if (testnet && /mainnet/i.test(writeRpc)) {
+  if (writeRpc && testnet && /mainnet/i.test(writeRpc)) {
     throw new Error(`Refusing to write to testnet: the endpoint names mainnet (${redact(writeRpc)})`);
   }
-  if (!testnet && /testnet/i.test(writeRpc)) {
+  if (writeRpc && !testnet && /testnet/i.test(writeRpc)) {
     throw new Error(`Refusing to write to mainnet: the endpoint names testnet (${redact(writeRpc)})`);
   }
 

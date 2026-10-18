@@ -125,6 +125,8 @@ export interface FixturePublic {
   backed_by: string;
   /** One sentence on what is behind the endpoint. */
   backing: string;
+  /** The request this service is asked for by default, as a JSON string. */
+  sample_request?: string;
   /** An absolute URL, when the service is a third party's API. */
   endpoint?: string | null;
   /** `GET` or `POST`; defaults to POST. */

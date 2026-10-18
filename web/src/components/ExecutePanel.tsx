@@ -239,9 +239,10 @@ export function ExecutePanel({
 
           <div className="stack--tight">
             <button
-              type="button"
-              className="button button--primary"
-              onClick={onRun}
+                id="run-call"
+                type="button"
+                className="button button--primary"
+                onClick={onRun}
               disabled={!canRun || running}
             >
               {running ? (

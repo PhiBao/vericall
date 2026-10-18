@@ -20,7 +20,9 @@
     "bond": "node --experimental-strip-types --no-warnings scripts/bond.ts",
     "test:wallet": "node --experimental-strip-types --no-warnings scripts/test-wallet.ts",
     "test": "pnpm typecheck && pnpm test:wallet",
-    "demo:outage": "node --experimental-strip-types --no-warnings scripts/demo-outage.ts"
+    "demo:outage": "node --experimental-strip-types --no-warnings scripts/demo-outage.ts",
+    "wallet": "node --experimental-strip-types --no-warnings tools/demo-wallet.ts",
+    "test:settle-ui": "node --experimental-strip-types --no-warnings scripts/test-settle-ui.ts"
   },
   "dependencies": {
     "react": "^19.0.0",

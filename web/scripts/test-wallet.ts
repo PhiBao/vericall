@@ -35,6 +35,8 @@ async function loadChromium(): Promise<Chromium> {
   }
 }
 
+const STUB_ACCOUNT = "0x5afe5afe5afe5afe5afe5afe5afe5afe5afe5afe";
+
 const BASE = process.env.VERICALL_BASE ?? "http://localhost:8787";
 const CHAIN_ID = Number(process.env.VERICALL_CHAIN_ID ?? 5042);
 
@@ -59,7 +61,8 @@ async function main(): Promise<void> {
   // Every request the page makes through the provider is recorded, so the
   // assertions are about what the page did, not about what it looks like.
   await page.addInitScript(
-    ({ chainId }) => {
+    ({ chainId, stubAccount }) => {
+      const STUB_ACCOUNT = stubAccount;
       const calls: { method: string; params: unknown }[] = [];
       let accounts: string[] = [];
       let current = "0x1"; // start on Ethereum, so a switch is required
@@ -74,7 +77,7 @@ async function main(): Promise<void> {
             case "eth_accounts":
               return accounts;
             case "eth_requestAccounts":
-              accounts = ["0x4AB5e7F2b5464B9494b49EFE41C2f00e7bcfE555"];
+              accounts = [STUB_ACCOUNT];
               return accounts;
             case "eth_chainId":
               return `0x${current.slice(2)}`;
@@ -108,7 +111,7 @@ async function main(): Promise<void> {
       };
       void chainId;
     },
-    { chainId: CHAIN_ID },
+    { chainId: CHAIN_ID, stubAccount: STUB_ACCOUNT },
   );
 
   await page.goto(BASE, { waitUntil: "domcontentloaded" });
@@ -137,7 +140,7 @@ async function main(): Promise<void> {
   }
 
   const bodyText = await page.locator("body").innerText();
-  check(/4AB5/i.test(bodyText), "the address is shown once connected");
+  check(/5AFE/i.test(bodyText), "the address is shown once connected");
   check(/on Arc|Arc/i.test(bodyText), "the chain chip reports the settlement chain");
 
   console.log("\nDisconnecting\n─────────────");
@@ -156,7 +159,9 @@ async function main(): Promise<void> {
     "the page returns to its disconnected state",
   );
   check(
-    !/4AB5/i.test(await page.locator("body").innerText()),
+    // The wallet chip is the only place this address can appear: the stub holds
+    // an address that is not one of the ledger's watched wallets.
+    !/5AFE/i.test(await page.locator("body").innerText()),
     "the address is no longer displayed",
   );
 
@@ -164,7 +169,7 @@ async function main(): Promise<void> {
   await page.getByRole("button", { name: "Connect wallet" }).click();
   await page.waitForTimeout(1200);
   check(
-    /4AB5/i.test(await page.locator("body").innerText()),
+    /5AFE/i.test(await page.locator("body").innerText()),
     "connecting again works after a disconnect",
   );
 

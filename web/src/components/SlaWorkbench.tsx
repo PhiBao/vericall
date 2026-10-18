@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import type { Hash } from "viem";
+import { keccak256, toHex, type Hash } from "viem";
 import type { CallMode } from "../api";
 import { describeError, postExecute, postQuote } from "../api";
 import type { WalletController } from "../chain";
@@ -109,6 +109,7 @@ export function SlaWorkbench({ config, configError, ledger, wallet, onSettled, r
 
   const [acceptedCovenantId, setAcceptedCovenantId] = useState<number | null>(null);
 
+
   /**
    * Orders that can be settled by a run against this fixture.
    *
@@ -128,6 +129,7 @@ export function SlaWorkbench({ config, configError, ledger, wallet, onSettled, r
   }, [ledger, covenantRecord]);
 
   const [boundOrderId, setBoundOrderId] = useState<string | null>(null);
+
   // A selection from another covenant is not a selection: derive the effective
   // value instead of clearing state in an effect.
   const effectiveBoundOrderId = openOrders.some((order) => order.id === boundOrderId)
@@ -144,6 +146,76 @@ export function SlaWorkbench({ config, configError, ledger, wallet, onSettled, r
   const probeSeq = useRef(0);
 
   const [mode, setMode] = useState<CallMode>("normal");
+  /**
+   * The request body, as the caller will commit it.
+   *
+   * Starting a call means writing down what is being bought: these exact bytes
+   * are hashed into the order, so the verifier can later prove it sent what the
+   * caller asked for. Seeded from the service's own sample so the field is never
+   * an empty box.
+   */
+  const [requestText, setRequestText] = useState<string>("");
+  useEffect(() => {
+    if (!fixture) return;
+    setRequestText((current) => (current.trim() === "" ? (fixture.sample_request ?? "{}") : current));
+    // Reset when the covenant changes: a body written for one service is not a
+    // request the next one would accept.
+  }, [fixture?.slug]);
+
+  const [escrowedBody, setEscrowedBody] = useState<string | null>(null);
+  /** The commitment this session made, so the run binds to *its* order. */
+  const [escrowedHash, setEscrowedHash] = useState<string | null>(null);
+
+  /**
+   * The order this session escrowed, once the chain shows it.
+   *
+   * The wallet's transaction lands before the view of the chain catches up, so
+   * the caller has to be waited for rather than shown an empty list: after
+   * escrowing, look for our own commitment until it appears. A caller should
+   * never have to reload a page to see money they just committed.
+   */
+  const ownOrder = useMemo(
+    () =>
+      escrowedHash === null
+        ? null
+        : (openOrders.find(
+            (order) => order.request_hash.toLowerCase() === escrowedHash.toLowerCase(),
+          ) ?? null),
+    [escrowedHash, openOrders],
+  );
+  const awaitingOrder = escrowedHash !== null && ownOrder === null;
+
+  useEffect(() => {
+    if (!awaitingOrder) return;
+    const started = Date.now();
+    const timer = window.setInterval(() => {
+      if (Date.now() - started > 60_000) {
+        window.clearInterval(timer);
+        return;
+      }
+      onSettled();
+    }, 2000);
+    return () => window.clearInterval(timer);
+  }, [awaitingOrder, onSettled]);
+  /**
+   * Bind the order this session escrowed.
+   *
+   * By commitment, not by position: the ledger holds orders from other sessions,
+   * and binding the newest of those would attest to a request this session never
+   * wrote — which the verifier refuses, correctly, leaving the caller with an
+   * unexplained 409. A selection the user made by hand stands, but only while it
+   * is still a real order.
+   */
+  useEffect(() => {
+    if (ownOrder === null) return;
+    setBoundOrderId((current) =>
+      current !== null && openOrders.some((order) => order.id === current) ? current : ownOrder.id,
+    );
+  }, [ownOrder, openOrders]);
+
+  const [escrowState, setEscrowState] = useState<
+    { kind: "idle" } | { kind: "signing" } | { kind: "done"; orderId: string; hash: string } | { kind: "failed"; message: string }
+  >({ kind: "idle" });
   const [running, setRunning] = useState(false);
   const [run, setRun] = useState<ExecuteResponse | null>(null);
   const [runError, setRunError] = useState<string | null>(null);
@@ -244,6 +316,68 @@ export function SlaWorkbench({ config, configError, ledger, wallet, onSettled, r
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ledger]);
 
+  /**
+   * The URL the covenant names. A third-party service publishes an absolute
+   * endpoint; the others are served by the verifier under its public base. The
+   * request hash must be taken over this exact string, or the verifier's check
+   * will — correctly — refuse to sign.
+   */
+  const covenantUrl = useMemo(() => {
+    if (!fixture) return null;
+    if (fixture.endpoint) return fixture.endpoint;
+    const base = config?.mock_base_url;
+    return base ? `${base.replace(/\/$/, "")}/mock/${fixture.slug}` : null;
+  }, [fixture, config?.mock_base_url]);
+
+  /**
+   * Escrow this call from the connected wallet.
+   *
+   * The commitment comes first: the hash of the request goes onchain, and only
+   * then can a call be run and attested to. A covenant's newest registration is
+   * used, matching what the verifier will attest against.
+   */
+  const escrowCall = useCallback(async (): Promise<void> => {
+    if (!fixture || !covenantRecord || !covenantUrl) return;
+    const target = asAddress(config?.contract ?? null);
+    if (target === null) {
+      setEscrowState({ kind: "failed", message: "the verifier has not reported a clearinghouse address" });
+      return;
+    }
+    setEscrowState({ kind: "signing" });
+    try {
+      const body = requestText.trim() === "" ? "{}" : requestText;
+      const serviceId = BigInt(covenantRecord.id);
+      const requestHash = keccak256(toHex(`${covenantUrl}\n${body}`));
+      const usdc = asAddress(config?.usdc ?? null);
+      if (usdc === null) {
+        setEscrowState({ kind: "failed", message: "the verifier has not reported a USDC address" });
+        return;
+      }
+      const price = BigInt(Math.round(Number(fixture.price_usdc) * 1_000_000));
+      // The wallet grants the allowance if it needs one, then escrows. Both are
+      // signed by the caller; the verifier never touches the money.
+      const { orderHash } = await wallet.escrowCall({
+        contract: target,
+        usdc,
+        serviceId,
+        requestHash,
+        ttlSeconds: 900n,
+        price,
+      });
+      setEscrowedBody(body);
+      setEscrowedHash(requestHash);
+      setEscrowState({ kind: "done", orderId: "", hash: orderHash });
+      // The order list comes from the chain; ask for it rather than assuming the
+      // index is current.
+      onSettled();
+    } catch (cause) {
+      setEscrowState({
+        kind: "failed",
+        message: cause instanceof Error ? cause.message : String(cause),
+      });
+    }
+  }, [fixture, covenantRecord, covenantUrl, config?.contract, config?.usdc, requestText, wallet, onSettled]);
+
   const runCall = useCallback(async (): Promise<void> => {
     if (!fixture) return;
     setRunning(true);
@@ -266,6 +400,9 @@ export function SlaWorkbench({ config, configError, ledger, wallet, onSettled, r
         mode,
         ...(serviceId === null ? {} : { service_id: serviceId }),
         ...orderBinding,
+        // Only a request the caller wrote down here can be attested to, so the
+        // body travels with the request for the verifier to check.
+        ...(escrowedBody === null ? {} : { body_raw: escrowedBody }),
       });
 
     try {
@@ -553,6 +690,105 @@ export function SlaWorkbench({ config, configError, ledger, wallet, onSettled, r
       ) : null}
 
       <div id="run">
+        {/*
+          Starting a call is the caller's commitment, so it comes first: the
+          request is written here, hashed, and escrowed onchain. Only then can a
+          call be run and attested to — which is why the button below is the one
+          that creates the order rather than a script.
+        */}
+        <section className="panel" aria-labelledby="start-heading">
+          <div className="panel__head">
+            <h2 className="panel__title" id="start-heading">
+              Start a call
+            </h2>
+            <span className="panel__note">
+              the request is committed onchain before the call runs
+            </span>
+          </div>
+          <div className="panel__body stack">
+            <div className="field">
+              <label htmlFor="request-body">Request</label>
+              <textarea
+                id="request-body"
+                className="mono"
+                rows={3}
+                spellCheck={false}
+                value={requestText}
+                onChange={(event) => setRequestText(event.target.value)}
+                disabled={escrowedBody !== null}
+              />
+              <span className="tiny muted">
+                These exact bytes are hashed into the order. The verifier sends them and refuses
+                to attest to anything else, so what the contract judges is what was written here.
+              </span>
+            </div>
+
+            <div className="row--between">
+              <div className="row">
+                <button
+                  id="escrow-call"
+                  type="button"
+                  className="button button--primary"
+                  onClick={() => void escrowCall()}
+                  disabled={
+                    wallet.status !== "connected" ||
+                    wallet.onSettlementChain !== true ||
+                    covenantRecord === null ||
+                    escrowState.kind === "signing" ||
+                    escrowedBody !== null
+                  }
+                >
+                  {escrowState.kind === "signing"
+                    ? "Waiting for the wallet…"
+                    : escrowedBody !== null
+                      ? "Escrowed"
+                      : `Escrow ${fixture.price_usdc} USDC`}
+                </button>
+                {escrowedBody !== null ? (
+                  <button
+                    type="button"
+                    className="button button--quiet"
+                    onClick={() => {
+                      setEscrowedBody(null);
+                      setEscrowedHash(null);
+                      setEscrowState({ kind: "idle" });
+                      setBoundOrderId(null);
+                    }}
+                  >
+                    start another
+                  </button>
+                ) : null}
+              </div>
+              <span className="tiny muted">
+                {wallet.status !== "connected"
+                  ? "connect a wallet to fund a call"
+                  : covenantRecord === null
+                    ? "the ledger holds no covenant this request can be escrowed against"
+                    : "createOrder is sent from your wallet; the verifier never holds the funds"}
+              </span>
+            </div>
+
+            {escrowState.kind === "failed" ? (
+              <p className="banner banner--error" role="alert">
+                {escrowState.message}
+              </p>
+            ) : null}
+            {escrowState.kind === "done" ? (
+              awaitingOrder ? (
+                <p className="small">
+                  <span className="spinner" aria-hidden="true" /> Escrowed. Waiting for Arc to show
+                  the order before the call runs — this clears in a moment.
+                </p>
+              ) : (
+                <p className="small">
+                  Escrowed. Run the call below and the verifier will attest to this order —{" "}
+                  <span className="mono">{escrowState.hash.slice(0, 12)}…</span>
+                </p>
+              )
+            ) : null}
+          </div>
+        </section>
+
         <ExecutePanel
         fixture={fixture}
         mode={mode}
@@ -600,6 +836,7 @@ export function SlaWorkbench({ config, configError, ledger, wallet, onSettled, r
               <div className="row--between">
                 <div className="row">
                   <button
+                    id="settle-order"
                     type="button"
                     className="button button--primary"
                     onClick={() => void settleOnchain()}
